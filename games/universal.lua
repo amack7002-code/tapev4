@@ -8019,36 +8019,42 @@ run(function()
         local lowest, minX, maxX, minZ, maxZ
         for _, v in collectionService:GetTagged('block') do
             if v and v.Parent and v:IsA('BasePart') and v:IsDescendantOf(workspace) then
-                local half = v.Size / 2
                 local cf = v.CFrame
-                local xExtent = math.abs(cf.RightVector.X) * half.X + math.abs(cf.UpVector.X) * half.Y + math.abs(cf.LookVector.X) * half.Z
-                local yExtent = math.abs(cf.RightVector.Y) * half.X + math.abs(cf.UpVector.Y) * half.Y + math.abs(cf.LookVector.Y) * half.Z
-                local zExtent = math.abs(cf.RightVector.Z) * half.X + math.abs(cf.UpVector.Z) * half.Y + math.abs(cf.LookVector.Z) * half.Z
-                lowest = math.min(lowest or (cf.Position.Y - yExtent), cf.Position.Y - yExtent)
-                minX, maxX = math.min(minX or (cf.Position.X - xExtent), cf.Position.X - xExtent), math.max(maxX or (cf.Position.X + xExtent), cf.Position.X + xExtent)
-                minZ, maxZ = math.min(minZ or (cf.Position.Z - zExtent), cf.Position.Z - zExtent), math.max(maxZ or (cf.Position.Z + zExtent), cf.Position.Z + zExtent)
+                local pos = cf.Position
+                lowest = math.min(lowest or pos.Y, pos.Y)
+                minX, maxX = math.min(minX or pos.X, pos.X), math.max(maxX or pos.X, pos.X)
+                minZ, maxZ = math.min(minZ or pos.Z, pos.Z), math.max(maxZ or pos.Z, pos.Z)
             end
         end
         if not lowest then return nil end
-        local width = math.max(2048, maxX - minX + 128)
-        local depth = math.max(2048, maxZ - minZ + 128)
-        return CFrame.new((minX + maxX) / 2, lowest - 5, (minZ + maxZ) / 2), Vector3.new(width, 0.05, depth)
+        return CFrame.new((minX + maxX) / 2, lowest - 7, (minZ + maxZ) / 2), Vector3.new(2048, 0.05, 2048)
+    end
+
+    local function getFallbackSurface()
+        local character = entitylib.isAlive and entitylib.character
+        local rootPart = character and character.RootPart
+        if rootPart and rootPart.Parent then
+            local params = RaycastParams.new()
+            params.FilterType = Enum.RaycastFilterType.Exclude
+            params.FilterDescendantsInstances = {character.Character or lplr.Character}
+            local hit = workspace:Raycast(rootPart.Position + Vector3.new(0, 4, 0), Vector3.new(0, -128, 0), params)
+            if hit then
+                return CFrame.new(hit.Position - Vector3.new(0, 7, 0)), Vector3.new(2048, 0.05, 2048)
+            end
+            return CFrame.new(rootPart.Position - Vector3.new(0, 7, 0)), Vector3.new(2048, 0.05, 2048)
+        end
+        return CFrame.new(0, -20, 0), Vector3.new(2048, 0.05, 2048)
     end
 
     local function refreshSurface()
         if not WaterAmbient.Enabled then return end
         local surface, surfaceSize = findMapSurface()
+        if not surface then
+            surface, surfaceSize = getFallbackSurface()
+        end
         if waterLayer and waterLayer.Parent == workspace then
-            if surface then
-                waterLayer.CFrame = surface
-                waterLayer.Size = surfaceSize
-            else
-                local character = entitylib.isAlive and entitylib.character
-                local rootPart = character and character.RootPart
-                local pos = rootPart and rootPart.Position
-                waterLayer.CFrame = CFrame.new(pos and pos.X or 0, -20, pos and pos.Z or 0)
-                waterLayer.Size = Vector3.new(2048, 0.05, 2048)
-            end
+            waterLayer.CFrame = surface
+            waterLayer.Size = surfaceSize
             return
         end
         if waterLayer then waterLayer:Destroy() end
@@ -8060,11 +8066,8 @@ run(function()
         layer.CanQuery = false
         layer.CastShadow = false
         layer.Material = Enum.Material.Glass
-        layer.Size = surfaceSize or Vector3.new(2048, 0.05, 2048)
-        local character = entitylib.isAlive and entitylib.character
-        local rootPart = character and character.RootPart
-        local pos = rootPart and rootPart.Position
-        layer.CFrame = surface or CFrame.new(pos and pos.X or 0, -20, pos and pos.Z or 0)
+        layer.Size = surfaceSize
+        layer.CFrame = surface
         layer.Color = WaterColor and Color3.fromHSV(WaterColor.Hue, WaterColor.Sat, WaterColor.Value)
             or Color3.fromRGB(0, 170, 255)
         layer.Transparency = 0.25
