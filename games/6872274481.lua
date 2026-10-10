@@ -17853,17 +17853,20 @@ run(function()
 								}):andThen(function(suc)
 									if suc then
 										lastPickupTime = tick()
-										if bedwars.SoundList then
-											bedwars.SoundManager:playSound(bedwars.SoundList.PICKUP_ITEM_DROP)
-											local itemMeta = bedwars.ItemMeta[v.Name]
-											if itemMeta then
-												local sound = itemMeta.pickUpOverlaySound
-												if sound then
-													bedwars.SoundManager:playSound(sound, {
-														position = v.Position,
-														volumeMultiplier = 0.9
-													})
-												end
+										local soundManager = bedwars.SoundManager
+										if soundManager then
+											local soundList = bedwars.SoundList
+											local pickupSound = soundList and soundList.PICKUP_ITEM_DROP
+											if pickupSound then
+												soundManager:playSound(pickupSound)
+											end
+											local itemMeta = bedwars.ItemMeta and bedwars.ItemMeta[v.Name]
+											local sound = itemMeta and itemMeta.pickUpOverlaySound
+											if sound then
+												soundManager:playSound(sound, {
+													position = v.Position,
+													volumeMultiplier = 0.9
+												})
 											end
 										end
 									end
