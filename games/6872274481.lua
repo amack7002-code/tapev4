@@ -12229,6 +12229,15 @@ run(function()
 				stroke.Parent = ktLabel
 
 				local ktEventsBound = false
+				local function waitForWorldBlocks()
+					while KitTracker.Enabled and ent.Player.Parent do
+						local worldFolder = getWorldFolder()
+						local blocks = worldFolder and worldFolder:FindFirstChild('Blocks')
+						if blocks then return blocks end
+						task.wait(0.1)
+					end
+					return nil
+				end
 				local function updateKtLabel()
 					if not KitTracker.Enabled then ktLabel.Text = '' return end
 					local playerKit = ent.Player:GetAttribute('PlayingAsKits') or 'none'
@@ -12327,8 +12336,8 @@ run(function()
 										ktLabel.Text = '【 🏪 】'
 									end
 								end))
-								local worldFolder = getWorldFolder()
-								local blocks = worldFolder:WaitForChild("Blocks", math.huge)
+								local blocks = waitForWorldBlocks()
+								if not blocks then return end
 								table.insert(kitTrackerConnections[ent], blocks.ChildAdded:Connect(function(obj)
 									if obj.Name == 'black_market_shop' and obj:GetAttribute('PlacedByUserId') == ent.Player.UserId then
 									local billboard = Instance.new('BillboardGui')
@@ -12402,8 +12411,8 @@ run(function()
 							ktEventsBound = true
 							if not kitTrackerConnections[ent] then kitTrackerConnections[ent] = {} end
 							task.spawn(function()
-								local worldFolder = getWorldFolder()
-								local blocks = worldFolder:WaitForChild("Blocks", math.huge)
+								local blocks = waitForWorldBlocks()
+								if not blocks then return end
 								table.insert(kitTrackerConnections[ent], blocks.ChildAdded:Connect(function(obj)
 									if obj.Name == 'satellite_dish' and obj:GetAttribute('PlacedByUserId') == ent.Player.UserId then
 									local billboard = Instance.new('BillboardGui')
