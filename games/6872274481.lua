@@ -11680,7 +11680,11 @@ run(function()
 	local function colorValue()
 		local m = cached('armor-trim-color-meta', 'ArmorTrimColorMeta')
 		local entry = m and m[colorIndex()]
-		return entry and entry.color or Color3.new(1, 1, 1)
+		local value = entry and entry.color
+		if typeof(value) == 'Color3' then
+			return value
+		end
+		return Color3.new(1, 1, 1)
 	end
 
 	local function rankMaterial()
