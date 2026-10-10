@@ -18170,7 +18170,13 @@ run(function()
 		}):andThen(function(suc)
 			if suc then
 				notif('AutoBuy', 'Bought '..(meta and meta.displayName or item.itemType), 3)
-				bedwars.SoundManager:playSound(bedwars.SoundList.BEDWARS_PURCHASE_ITEM)
+				local soundManager = bedwars.SoundManager
+				local playSound = soundManager and soundManager.playSound
+				local soundList = bedwars.SoundList
+				local purchaseSound = soundList and soundList.BEDWARS_PURCHASE_ITEM
+				if type(playSound) == 'function' and purchaseSound then
+					pcall(playSound, soundManager, purchaseSound)
+				end
 				bedwars.Store:dispatch({
 					type = 'BedwarsAddItemPurchased',
 					itemType = item.itemType
