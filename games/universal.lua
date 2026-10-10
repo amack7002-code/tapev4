@@ -8012,99 +8012,131 @@ end)
 run(function()
     local WaterAmbient
     local WaterColor
-    local waterLayer
+    local terrain = workspace:FindFirstChildOfClass('Terrain')
     local generation = 0
+    local waterRegion
+    local originalMaterials
+    local originalOccupancy
+    local originalWaterSettings
 
-    local function findMapSurface()
+    local function findMapBounds()
         local lowest, minX, maxX, minZ, maxZ
         for _, v in collectionService:GetTagged('block') do
             if v and v.Parent and v:IsA('BasePart') and v:IsDescendantOf(workspace) then
-                local cf = v.CFrame
-                local pos = cf.Position
-                lowest = math.min(lowest or pos.Y, pos.Y)
-                minX, maxX = math.min(minX or pos.X, pos.X), math.max(maxX or pos.X, pos.X)
-                minZ, maxZ = math.min(minZ or pos.Z, pos.Z), math.max(maxZ or pos.Z, pos.Z)
+                local pos = v.Position
+                local half = v.Size / 2
+                lowest = math.min(lowest or (pos.Y - half.Y), pos.Y - half.Y)
+                minX, maxX = math.min(minX or (pos.X - half.X), pos.X - half.X), math.max(maxX or (pos.X + half.X), pos.X + half.X)
+                minZ, maxZ = math.min(minZ or (pos.Z - half.Z), pos.Z - half.Z), math.max(maxZ or (pos.Z + half.Z), pos.Z + half.Z)
             end
         end
-        if not lowest then return nil end
-        return CFrame.new((minX + maxX) / 2, lowest - 7, (minZ + maxZ) / 2), Vector3.new(2048, 0.05, 2048)
-    end
+        if lowest then
+            return {
+                minX = minX - 64,
+                maxX = maxX + 64,
+                minZ = minZ - 64,
+                maxZ = maxZ + 64,
+                waterY = lowest - 7
+            }
+        end
 
-    local function getFallbackSurface()
         local character = entitylib.isAlive and entitylib.character
         local rootPart = character and character.RootPart
-        if rootPart and rootPart.Parent then
-            local params = RaycastParams.new()
-            params.FilterType = Enum.RaycastFilterType.Exclude
-            params.FilterDescendantsInstances = {character.Character or lplr.Character}
-            local hit = workspace:Raycast(rootPart.Position + Vector3.new(0, 4, 0), Vector3.new(0, -128, 0), params)
-            if hit then
-                return CFrame.new(hit.Position - Vector3.new(0, 7, 0)), Vector3.new(2048, 0.05, 2048)
-            end
-            return CFrame.new(rootPart.Position - Vector3.new(0, 7, 0)), Vector3.new(2048, 0.05, 2048)
-        end
-        return CFrame.new(0, -20, 0), Vector3.new(2048, 0.05, 2048)
+        if not rootPart or not rootPart.Parent then return nil end
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = {character.Character or lplr.Character}
+        local hit = workspace:Raycast(rootPart.Position + Vector3.new(0, 4, 0), Vector3.new(0, -128, 0), params)
+        local floorY = hit and hit.Position.Y or rootPart.Position.Y
+        return {
+            minX = rootPart.Position.X - 512,
+            maxX = rootPart.Position.X + 512,
+            minZ = rootPart.Position.Z - 512,
+            maxZ = rootPart.Position.Z + 512,
+            waterY = floorY - 7
+        }
     end
 
-    local function refreshSurface()
-        if not WaterAmbient.Enabled then return end
-        local surface, surfaceSize = findMapSurface()
-        if not surface then
-            surface, surfaceSize = getFallbackSurface()
+    local function makeWaterRegion(bounds)
+        return Region3.new(
+            Vector3.new(bounds.minX, bounds.waterY - 4, bounds.minZ),
+            Vector3.new(bounds.maxX, bounds.waterY, bounds.maxZ)
+        ):ExpandToGrid(4)
+    end
+
+    local function restoreWater()
+        if terrain and waterRegion and originalMaterials and originalOccupancy then
+            local ok, err = pcall(function()
+                terrain:WriteVoxels(waterRegion, 4, originalMaterials, originalOccupancy)
+            end)
+            if not ok then warn('[WaterAmbient] failed to restore terrain: ' .. tostring(err)) end
         end
-        if waterLayer and waterLayer.Parent == workspace then
-            waterLayer.CFrame = surface
-            waterLayer.Size = surfaceSize
-            return
+        if terrain and originalWaterSettings then
+            pcall(function()
+                terrain.WaterColor = originalWaterSettings.Color
+                terrain.WaterTransparency = originalWaterSettings.Transparency
+                terrain.WaterReflectance = originalWaterSettings.Reflectance
+                terrain.WaterWaveSize = originalWaterSettings.WaveSize
+                terrain.WaterWaveSpeed = originalWaterSettings.WaveSpeed
+            end)
         end
-        if waterLayer then waterLayer:Destroy() end
-        local layer = Instance.new('Part')
-        layer.Name = 'WaterAmbientLayer'
-        layer.Anchored = true
-        layer.CanCollide = false
-        layer.CanTouch = false
-        layer.CanQuery = false
-        layer.CastShadow = false
-        layer.Material = Enum.Material.Glass
-        layer.Size = surfaceSize
-        layer.CFrame = surface
-        layer.Color = WaterColor and Color3.fromHSV(WaterColor.Hue, WaterColor.Sat, WaterColor.Value)
-            or Color3.fromRGB(0, 170, 255)
-        layer.Transparency = 0.25
-        layer.Reflectance = 0.7
-        layer.Parent = workspace
-        waterLayer = layer
+        waterRegion = nil
+        originalMaterials = nil
+        originalOccupancy = nil
+        originalWaterSettings = nil
+    end
+
+    local function applyWater(currentGeneration)
+        if not terrain or not WaterAmbient.Enabled or generation ~= currentGeneration then return end
+        local bounds = findMapBounds()
+        if not bounds then return end
+
+        waterRegion = makeWaterRegion(bounds)
+        originalWaterSettings = {
+            Color = terrain.WaterColor,
+            Transparency = terrain.WaterTransparency,
+            Reflectance = terrain.WaterReflectance,
+            WaveSize = terrain.WaterWaveSize,
+            WaveSpeed = terrain.WaterWaveSpeed
+        }
+        local ok, err = pcall(function()
+            local materials, occupancy = terrain:ReadVoxels(waterRegion, 4)
+            originalMaterials, originalOccupancy = materials, occupancy
+            terrain:FillBlock(waterRegion.CFrame, waterRegion.Size, Enum.Material.Water)
+            terrain.WaterColor = Color3.fromHSV(WaterColor.Hue, WaterColor.Sat, WaterColor.Value)
+            terrain.WaterTransparency = 0.25
+            terrain.WaterReflectance = 0.7
+            terrain.WaterWaveSize = 0.13
+            terrain.WaterWaveSpeed = 8
+        end)
+        if not ok then
+            restoreWater()
+            warn('[WaterAmbient] failed to create terrain water: ' .. tostring(err))
+        end
     end
 
     WaterAmbient = vape.Categories.World:CreateModule({
         Name = 'WaterAmbient',
-        Tooltip = 'Fills the map with a decorative water layer.',
+        Tooltip = 'Fills the lower map with animated Terrain water.',
         Function = function(callback)
             generation += 1
             local currentGeneration = generation
             if callback then
-                -- Refresh after loading/respawn and recover if the map removes the layer.
-                -- Decorative only: never overwrite terrain or change swimming state.
-                refreshSurface()
-                local elapsed = 0
-                WaterAmbient:Clean(runService.Heartbeat:Connect(function(dt)
-                    if not WaterAmbient.Enabled or generation ~= currentGeneration then return end
-                    elapsed += dt
-                    if elapsed < 1 then return end
-                    elapsed = 0
-                    refreshSurface()
-                end))
-                WaterAmbient:Clean(entitylib.Events.LocalAdded:Connect(function()
-                    if WaterAmbient.Enabled and generation == currentGeneration then refreshSurface() end
-                end))
-                WaterAmbient:Clean(function()
-                    if generation ~= currentGeneration then return end
-                    if waterLayer then waterLayer:Destroy() end
-                    waterLayer = nil
+                task.spawn(function()
+                    for _ = 1, 40 do
+                        if not WaterAmbient.Enabled or generation ~= currentGeneration then return end
+                        if findMapBounds() then
+                            applyWater(currentGeneration)
+                            return
+                        end
+                        task.wait(0.25)
+                    end
+                    if WaterAmbient.Enabled and generation == currentGeneration then
+                        applyWater(currentGeneration)
+                    end
                 end)
-            elseif waterLayer then
-                waterLayer:Destroy()
-                waterLayer = nil
+            else
+                restoreWater()
             end
         end
     })
@@ -8113,8 +8145,8 @@ run(function()
         Name = 'Water Color',
         Tooltip = 'Color of the water.',
         Function = function(h, s, v)
-            if waterLayer then
-                waterLayer.Color = Color3.fromHSV(h, s, v)
+            if WaterAmbient.Enabled and terrain and originalWaterSettings then
+                terrain.WaterColor = Color3.fromHSV(h, s, v)
             end
         end
     })
