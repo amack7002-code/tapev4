@@ -39622,7 +39622,7 @@ run(function()
 												break
 											end
 											task.wait()
-										until not v or v.Parent ~= workspace.ItemDrops or not AutoCyber.Enabled or magnitude <= 5
+										until not AutoCyber.Enabled or magnitude <= 5
 									end
 								end
 							end
