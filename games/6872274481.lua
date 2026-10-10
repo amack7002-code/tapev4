@@ -17854,16 +17854,17 @@ run(function()
 									if suc then
 										lastPickupTime = tick()
 										local soundManager = bedwars.SoundManager
-										if soundManager then
+										local playSound = soundManager and soundManager.playSound
+										if type(playSound) == 'function' then
 											local soundList = bedwars.SoundList
 											local pickupSound = soundList and soundList.PICKUP_ITEM_DROP
 											if pickupSound then
-												soundManager:playSound(pickupSound)
+												pcall(playSound, soundManager, pickupSound)
 											end
 											local itemMeta = bedwars.ItemMeta and bedwars.ItemMeta[v.Name]
 											local sound = itemMeta and itemMeta.pickUpOverlaySound
 											if sound then
-												soundManager:playSound(sound, {
+												pcall(playSound, soundManager, sound, {
 													position = v.Position,
 													volumeMultiplier = 0.9
 												})
