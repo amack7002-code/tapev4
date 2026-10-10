@@ -1926,8 +1926,8 @@ run(function()
 	local Particles, Boxes, AttackDelay = {}, {}, tick()
 	
 	local function getAttackData()
-		if Mouse.Enabled then
-			if not inputService:IsMouseButtonPressed(0) then return false end
+		if Mouse.Enabled and not inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+			return false
 		end
 	
 		local tool = getTool()
@@ -1941,7 +1941,9 @@ run(function()
 				repeat
 					local interest, tool = getAttackData()
 					local attacked = {}
-					if interest then
+					local character = entitylib.isAlive and entitylib.character
+					local rootPart = character and character.RootPart
+					if interest and tool and rootPart and rootPart.Parent then
 						local plrs = entitylib.AllPosition({
 							Range = SwingRange.Value,
 							Wallcheck = Targets.Walls.Enabled or nil,
@@ -1950,14 +1952,21 @@ run(function()
 							NPCs = Targets.NPCs.Enabled,
 							Limit = Max.Value
 						})
-	
+
 						if #plrs > 0 then
-							local selfpos = entitylib.character.RootPart.Position
-							local localfacing = entitylib.character.RootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
-	
+							local selfpos = rootPart.Position
+							local localfacing = rootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
+							if localfacing.Magnitude > 0.001 then localfacing = localfacing.Unit end
+
 							for _, v in plrs do
-								local delta = (v.RootPart.Position - selfpos)
-								local angle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
+								local targetRoot = v.RootPart
+								if not targetRoot or not targetRoot.Parent then continue end
+								local delta = targetRoot.Position - selfpos
+								local flatDelta = delta * Vector3.new(1, 0, 1)
+								local angle = 0
+								if localfacing.Magnitude > 0.001 and flatDelta.Magnitude > 0.001 then
+									angle = math.acos(math.clamp(localfacing:Dot(flatDelta.Unit), -1, 1))
+								end
 								if angle > (math.rad(AngleSlider.Value) / 2) then continue end
 	
 								table.insert(attacked, {
@@ -1974,10 +1983,13 @@ run(function()
 								if Lunge.Enabled and tool.GripUp.X == 0 then break end
 								if delta.Magnitude > AttackRange.Value then continue end
 	
-								Overlay.FilterDescendantsInstances = {v.Character}
-								for _, part in workspace:GetPartBoundsInBox(v.RootPart.CFrame, Vector3.new(4, 4, 4), Overlay) do
-									firetouchinterest(interest.Parent, part, 1)
-									firetouchinterest(interest.Parent, part, 0)
+								local touchInterest = interest.Parent
+								if touchInterest and touchInterest.Parent and firetouchinterest then
+									Overlay.FilterDescendantsInstances = {v.Character}
+									for _, part in workspace:GetPartBoundsInBox(targetRoot.CFrame, Vector3.new(4, 4, 4), Overlay) do
+										firetouchinterest(touchInterest, part, 1)
+										firetouchinterest(touchInterest, part, 0)
+									end
 								end
 							end
 						end
@@ -1996,19 +2008,23 @@ run(function()
 						v.Parent = attacked[i] and gameCamera or nil
 					end
 	
-					if Face.Enabled and attacked[1] then
+					if Face.Enabled and attacked[1] and rootPart.Parent then
 						local targetRoot = attacked[1].Entity.RootPart
+						if targetRoot and targetRoot.Parent then
+							local faceTarget = true
 							if AngleSlider.Value < 360 then
-								local camLook = gameCamera and gameCamera.CFrame.LookVector or root.CFrame.LookVector
-								local flatCam = camLook * Vector3.new(1, 0, 1)
-								local flatDelta = (targetRoot.Position - root.Position) * Vector3.new(1, 0, 1)
-								if flatCam.Magnitude > 0.001 and flatDelta.Magnitude > 1 then
-									local camAngle = math.acos(math.clamp(flatCam.Unit:Dot(flatDelta.Unit), -1, 1))
-									if camAngle > math.rad(AngleSlider.Value) / 2 then return end
+								local camLook = (gameCamera and gameCamera.CFrame.LookVector or rootPart.CFrame.LookVector) * Vector3.new(1, 0, 1)
+								local flatDelta = (targetRoot.Position - rootPart.Position) * Vector3.new(1, 0, 1)
+								if camLook.Magnitude > 0.001 and flatDelta.Magnitude > 1 then
+									local camAngle = math.acos(math.clamp(camLook.Unit:Dot(flatDelta.Unit), -1, 1))
+									faceTarget = camAngle <= math.rad(AngleSlider.Value) / 2
 								end
 							end
-							local vec = targetRoot.Position * Vector3.new(1, 0, 1)
-						entitylib.character.RootPart.CFrame = CFrame.lookAt(entitylib.character.RootPart.Position, Vector3.new(vec.X, entitylib.character.RootPart.Position.Y + 0.01, vec.Z))
+							if faceTarget then
+								local vec = targetRoot.Position * Vector3.new(1, 0, 1)
+								rootPart.CFrame = CFrame.lookAt(rootPart.Position, Vector3.new(vec.X, rootPart.Position.Y + 0.01, vec.Z))
+							end
+						end
 					end
 	
 					task.wait()
@@ -8003,21 +8019,36 @@ run(function()
         local lowest, minX, maxX, minZ, maxZ
         for _, v in collectionService:GetTagged('block') do
             if v and v.Parent and v:IsA('BasePart') and v:IsDescendantOf(workspace) then
-                local pos = v.Position
-                lowest = math.min(lowest or pos.Y, pos.Y)
-                minX, maxX = math.min(minX or pos.X, pos.X), math.max(maxX or pos.X, pos.X)
-                minZ, maxZ = math.min(minZ or pos.Z, pos.Z), math.max(maxZ or pos.Z, pos.Z)
+                local half = v.Size / 2
+                local cf = v.CFrame
+                local xExtent = math.abs(cf.RightVector.X) * half.X + math.abs(cf.UpVector.X) * half.Y + math.abs(cf.LookVector.X) * half.Z
+                local yExtent = math.abs(cf.RightVector.Y) * half.X + math.abs(cf.UpVector.Y) * half.Y + math.abs(cf.LookVector.Y) * half.Z
+                local zExtent = math.abs(cf.RightVector.Z) * half.X + math.abs(cf.UpVector.Z) * half.Y + math.abs(cf.LookVector.Z) * half.Z
+                lowest = math.min(lowest or (cf.Position.Y - yExtent), cf.Position.Y - yExtent)
+                minX, maxX = math.min(minX or (cf.Position.X - xExtent), cf.Position.X - xExtent), math.max(maxX or (cf.Position.X + xExtent), cf.Position.X + xExtent)
+                minZ, maxZ = math.min(minZ or (cf.Position.Z - zExtent), cf.Position.Z - zExtent), math.max(maxZ or (cf.Position.Z + zExtent), cf.Position.Z + zExtent)
             end
         end
         if not lowest then return nil end
-        return CFrame.new((minX + maxX) / 2, lowest - 7, (minZ + maxZ) / 2)
+        local width = math.max(2048, maxX - minX + 128)
+        local depth = math.max(2048, maxZ - minZ + 128)
+        return CFrame.new((minX + maxX) / 2, lowest - 5, (minZ + maxZ) / 2), Vector3.new(width, 0.05, depth)
     end
 
     local function refreshSurface()
         if not WaterAmbient.Enabled then return end
-        local surface = findMapSurface()
+        local surface, surfaceSize = findMapSurface()
         if waterLayer and waterLayer.Parent == workspace then
-            if surface then waterLayer.CFrame = surface end
+            if surface then
+                waterLayer.CFrame = surface
+                waterLayer.Size = surfaceSize
+            else
+                local character = entitylib.isAlive and entitylib.character
+                local rootPart = character and character.RootPart
+                local pos = rootPart and rootPart.Position
+                waterLayer.CFrame = CFrame.new(pos and pos.X or 0, -20, pos and pos.Z or 0)
+                waterLayer.Size = Vector3.new(2048, 0.05, 2048)
+            end
             return
         end
         if waterLayer then waterLayer:Destroy() end
@@ -8029,9 +8060,10 @@ run(function()
         layer.CanQuery = false
         layer.CastShadow = false
         layer.Material = Enum.Material.Glass
-        layer.Size = Vector3.new(2048, 0.05, 2048)
+        layer.Size = surfaceSize or Vector3.new(2048, 0.05, 2048)
         local character = entitylib.isAlive and entitylib.character
-        local pos = character and character.RootPart and character.RootPart.Position
+        local rootPart = character and character.RootPart
+        local pos = rootPart and rootPart.Position
         layer.CFrame = surface or CFrame.new(pos and pos.X or 0, -20, pos and pos.Z or 0)
         layer.Color = WaterColor and Color3.fromHSV(WaterColor.Hue, WaterColor.Sat, WaterColor.Value)
             or Color3.fromRGB(0, 170, 255)
