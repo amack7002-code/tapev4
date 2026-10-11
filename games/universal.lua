@@ -8033,7 +8033,7 @@ run(function()
         if lowest then
             return {
                 minX = minX - 64,
-                maxX = maxX + 9e9,
+				maxX = maxX + 1000,
                 minZ = minZ - 64,
                 maxZ = maxZ + 64,
                 waterY = lowest - 7
