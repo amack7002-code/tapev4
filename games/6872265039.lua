@@ -256,6 +256,8 @@ run(function()
     
         local SavedTags = {}
         local TagToggles = {}
+        local originalTag
+        local writingTag = false
         
         local function safeSet(attr, value)
             local lp = game.Players.LocalPlayer
@@ -269,38 +271,37 @@ run(function()
         local function buildTag()
             if not EquippedTag then return "" end
             local hex = string.format("#%02X%02X%02X",
-                ClanColor.R * 255,
-                ClanColor.G * 255,
-                ClanColor.B * 255
+                math.round(ClanColor.R * 255),
+                math.round(ClanColor.G * 255),
+                math.round(ClanColor.B * 255)
             )
-            return "<font color='"..hex.."'>"..EquippedTag.."</font>"
+            local escaped = EquippedTag:gsub('&', '&amp;'):gsub('<', '&lt;'):gsub('>', '&gt;'):gsub('"', '&quot;'):gsub("'", '&apos;')
+            return "<font color='"..hex.."'>"..escaped.."</font>"
         end
         
         local function updateClanTag()
-            if enabledFlag then
-                safeSet("ClanTag", buildTag())
-            else
-                safeSet("ClanTag", "")
-            end
+            if not enabledFlag then return end
+            writingTag = true
+            safeSet("ClanTag", buildTag())
+            writingTag = false
         end
         
         local function createTagToggles()
-            for i, toggle in pairs(TagToggles) do
-                if toggle and toggle.Object then
-                    toggle.Object:Remove()
-                end
+            for tag, toggle in pairs(TagToggles) do
+                local present = table.find(SavedTags, tag) ~= nil
+                toggle.Object.Visible = present
+                if not present and toggle.Enabled then toggle:Toggle() end
             end
-            TagToggles = {}
             
             for i, tag in ipairs(SavedTags) do
-                if tag and tag ~= "" then
-                    TagToggles[i] = ClanModule:CreateToggle({
+                if tag and tag ~= "" and not TagToggles[tag] then
+                    TagToggles[tag] = ClanModule:CreateToggle({
                         Name = tag,
                         Function = function(callback)
                             if callback then
                                 EquippedTag = tag
                                 for j, otherToggle in pairs(TagToggles) do
-                                    if j ~= i and otherToggle and otherToggle.Enabled then
+                                    if j ~= tag and otherToggle and otherToggle.Enabled then
                                         otherToggle:Toggle()
                                     end
                                 end
@@ -320,11 +321,23 @@ run(function()
             Name = "CustomClanTag",
             HoverText = "Click tags to equip/unequip",
             Function = function(state)
-                enabledFlag = state
                 if state then
+                    originalTag = lplr:GetAttribute('ClanTag')
+                    enabledFlag = true
+                    ClanModule:Clean(lplr:GetAttributeChangedSignal('ClanTag'):Connect(function()
+                        if not enabledFlag or writingTag then return end
+                        local incoming = lplr:GetAttribute('ClanTag')
+                        if incoming == buildTag() then return end
+                        originalTag = incoming
+                        updateClanTag()
+                    end))
                     createTagToggles()
+                    updateClanTag()
+                else
+                    enabledFlag = false
+                    safeSet('ClanTag', originalTag)
+                    originalTag = nil
                 end
-                updateClanTag()
             end
         })
         
@@ -3373,14 +3386,32 @@ run(function()
     local SetPlayerLevel
     local originalLevel = nil
     local customLevel = 1
+    local levelEnabled = false
+    local writingLevel = false
+
+    local function applyLevel()
+        if not levelEnabled then return end
+        writingLevel = true
+        lplr:SetAttribute('PlayerLevel', customLevel)
+        writingLevel = false
+    end
 
     SetPlayerLevel = vape.Categories.Render:CreateModule({
         Name = "SetPlayerLevel",
         Function = function(state)
             if state then
                 originalLevel = lplr:GetAttribute("PlayerLevel")
-                lplr:SetAttribute("PlayerLevel", customLevel)
+                levelEnabled = true
+                SetPlayerLevel:Clean(lplr:GetAttributeChangedSignal('PlayerLevel'):Connect(function()
+                    if not levelEnabled or writingLevel then return end
+                    local incoming = lplr:GetAttribute('PlayerLevel')
+                    if incoming == customLevel then return end
+                    originalLevel = incoming
+                    applyLevel()
+                end))
+                applyLevel()
             else
+                levelEnabled = false
                 lplr:SetAttribute("PlayerLevel", originalLevel)
                 originalLevel = nil
             end
@@ -3396,9 +3427,7 @@ run(function()
         Decimal = 1,
         Function = function(val)
             customLevel = math.floor(val)
-            if SetPlayerLevel.Enabled then
-                lplr:SetAttribute("PlayerLevel", customLevel)
-            end
+            applyLevel()
         end
     })
 end)
@@ -4848,13 +4877,15 @@ run(function()
 	}
 
 	local loop
+	local generation = 0
+	local originalGui, spoofGui, originalEnabled
 
 	local function findNametag(char)
 		local head = char:FindFirstChild("Head")
 		if not head then return nil end
 
 		for _, gui in ipairs(CollectionService:GetTagged("EntityNameTag")) do
-			if gui:IsA("BillboardGui") and (gui.Adornee == head or gui:IsDescendantOf(char)) then
+			if gui.Name ~= 'NSSpoofGui' and gui:IsA("BillboardGui") and (gui.Adornee == head or gui:IsDescendantOf(char)) then
 				return gui
 			end
 		end
@@ -4867,19 +4898,17 @@ run(function()
 		return nil
 	end
 
-	local function waitForNametag(char)
-		for i = 1, 50 do 
-			local tag = findNametag(char)
-			if tag then return tag end
-			task.wait(0.1)
-		end
+	local function restoreNametag()
+		if spoofGui then spoofGui:Destroy() end
+		if originalGui and originalGui.Parent then originalGui.Enabled = originalEnabled end
+		originalGui, spoofGui, originalEnabled = nil, nil, nil
 	end
 
 	local function applySpoof(char)
-		local head = char:WaitForChild("Head", 5)
+		local head = char:FindFirstChild("Head")
 		if not head then return end
 
-		local original = waitForNametag(char)
+		local original = findNametag(char)
 		if not original then return end
 		local old = head:FindFirstChild("NSSpoofGui")
 		if old then old:Destroy() end
@@ -4888,87 +4917,65 @@ run(function()
 		clone.Adornee = head
 		clone.Parent = head
 
+		originalGui, spoofGui, originalEnabled = original, clone, original.Enabled
 		original.Enabled = false
+		clone.Enabled = originalEnabled
 
 		return clone
 	end
 
 	local function updateRank(spoof)
-		if not spoof then return end
+		if not spoof or not SpoofRankDropdown then return end
+		local selectedImage = BedwarsImageId[RANK_MAP[SpoofRankDropdown.Value]]
+		if not selectedImage or selectedImage == '' then return end
 
 		for _, d in ipairs(spoof:GetDescendants()) do
 			if d:IsA("ImageLabel") then
 				for _, rankKey in pairs(RANK_MAP) do
-					if d.Image == BedwarsImageId[rankKey] then
-						d.Image = BedwarsImageId[RANK_MAP[SpoofRankDropdown.Value]]
+					if BedwarsImageId[rankKey] and d.Image == BedwarsImageId[rankKey] then
+						d.Image = selectedImage
+						break
 					end
 				end
 			end
 		end
 	end
 
-	local function startLoop(char)
-		if loop then task.cancel(loop) end
-
+	local function startLoop()
+		generation += 1
+		local currentGeneration = generation
 		loop = task.spawn(function()
-			local head = char:WaitForChild("Head", 5)
-			if not head then return end
-
-			while NametagSpoof.Enabled and char.Parent do
-				task.wait(0.05)
-
-				local spoof = head:FindFirstChild("NSSpoofGui")
-				if spoof then
-					updateRank(spoof)
+			local activeCharacter
+			while NametagSpoof.Enabled and generation == currentGeneration do
+				local char = lplr.Character
+				if char ~= activeCharacter or not (originalGui and originalGui.Parent and spoofGui and spoofGui.Parent) then
+					restoreNametag()
+					activeCharacter = char
+					if char and char.Parent then applySpoof(char) end
 				end
+				if spoofGui then updateRank(spoofGui) end
+				task.wait(0.1)
 			end
 		end)
 	end
 
-	local function cleanup(char)
+	local function cleanup()
+		generation += 1
 		if loop then
 			task.cancel(loop)
 			loop = nil
 		end
-
-		if not char then return end
-		local head = char:FindFirstChild("Head")
-		if not head then return end
-
-		local spoof = head:FindFirstChild("NSSpoofGui")
-		if spoof then spoof:Destroy() end
-
-		local original = findNametag(char)
-		if original then
-			original.Enabled = true
-		end
+		restoreNametag()
 	end
 
 	NametagSpoof = vape.Categories.Render:CreateModule({
 		Name = "NametagSpoof",
 		Function = function(callback)
 			if callback then
-				if lplr.Character then
-					task.spawn(function()
-						local spoof = applySpoof(lplr.Character)
-						if spoof then
-							updateRank(spoof)
-							startLoop(lplr.Character)
-						end
-					end)
-				end
-
-				NametagSpoof:Clean(lplr.CharacterAdded:Connect(function(char)
-					task.spawn(function()
-						local spoof = applySpoof(char)
-						if spoof then
-							updateRank(spoof)
-							startLoop(char)
-						end
-					end)
-				end))
+				cleanup()
+				startLoop()
 			else
-				cleanup(lplr.Character)
+				cleanup()
 			end
 		end
 	})
@@ -4976,6 +4983,9 @@ run(function()
 	SpoofRankDropdown = NametagSpoof:CreateDropdown({
 		Name = "Rank",
 		List = {"Bronze","Silver","Gold","Platinum","Diamond","Emerald","Nightmare"},
-		Default = "Nightmare"
+		Default = "Nightmare",
+		Function = function()
+			if NametagSpoof.Enabled and spoofGui then updateRank(spoofGui) end
+		end
 	})
 end)
