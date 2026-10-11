@@ -218,10 +218,11 @@ local function createMobileButton(buttonapi, position)
 end
 
 local function downloadFile(path, func)
+	path = path:gsub('^newvape/', 'aerov4/')
 	if not isfile(path) then
 		createDownloader(path)
 		local suc, res = pcall(function()
-			return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/'..readfile('newvape/profiles/commit.txt')..'/'..select(1, path:gsub('newvape/', '')), true)
+			return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/'..readfile('aerov4/profiles/commit.txt')..'/'..select(1, path:gsub('^aerov4/', '')), true)
 		end)
 		if not suc or res == '404: Not Found' then
 			error(res)
@@ -1781,12 +1782,21 @@ function mainapi:CreateBar()
 	bar.BorderSizePixel = 0
 	bar.Parent = clickgui
 	local logo = Instance.new('ImageLabel')
-	logo.Size = UDim2.fromOffset(92, 25)
-	logo.Position = UDim2.fromOffset(11, 8)
+	logo.Name = 'TapeLogo'
+	logo.Size = UDim2.fromOffset(62, 18)
+	logo.Position = UDim2.fromOffset(11, 11)
 	logo.BackgroundTransparency = 1
-	logo.Image = getcustomasset('newvape/assets/old/barlogo.png')
+	logo.Image = assetfunction and downloadFile('aerov4/assets/old/tapelogo.png', assetfunction) or ''
 	logo.ImageColor3 = uipallet.Text
 	logo.Parent = bar
+	local logov4 = Instance.new('ImageLabel')
+	logov4.Name = 'V4Logo'
+	logov4.Size = UDim2.fromOffset(26, 18)
+	logov4.Position = UDim2.new(1, 1, 0, 0)
+	logov4.BackgroundTransparency = 1
+	logov4.Image = assetfunction and downloadFile('aerov4/assets/old/v4_tape_top_big.png', assetfunction) or ''
+	logov4.ImageColor3 = uipallet.Text
+	logov4.Parent = logo
 	local settingsbutton = Instance.new('TextButton')
 	settingsbutton.Size = UDim2.fromOffset(32, 32)
 	settingsbutton.Position = UDim2.fromOffset(108, 4)
