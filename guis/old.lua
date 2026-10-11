@@ -1798,7 +1798,7 @@ function mainapi:CreateBar()
 	logov4.BackgroundTransparency = 1
 	logov4.ScaleType = Enum.ScaleType.Fit
 	logov4.ResampleMode = Enum.ResamplerMode.Default
-	logov4.Image = assetfunction and downloadFile('aerov4/assets/old/v4_tape_header.png', assetfunction) or ''
+	logov4.Image = assetfunction and downloadFile('aerov4/assets/old/v4_tape_strip.png', assetfunction) or ''
 	logov4.ImageColor3 = uipallet.Text
 	logov4.Parent = logo
 	local settingsbutton = Instance.new('TextButton')
