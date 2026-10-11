@@ -7218,26 +7218,45 @@ run(function()
 	local FOV
 	local Value
 	local oldfov
-	
+	local connection
+
 	FOV = vape.Categories.Legit:CreateModule({
 		Name = 'FOV',
 		Function = function(callback)
 			if callback then
 				oldfov = gameCamera.FieldOfView
-				repeat
-					gameCamera.FieldOfView = Value.Value
-					task.wait()
-				until not FOV.Enabled
+				gameCamera.FieldOfView = Value.Value
+
+				connection = Value.Changed and Value.Changed:Connect(function()
+					if FOV.Enabled then
+						gameCamera.FieldOfView = Value.Value
+					end
+				end) or nil
+
+				if not connection then
+					task.spawn(function()
+						while FOV.Enabled do
+							gameCamera.FieldOfView = Value.Value
+							task.wait()
+						end
+					end)
+				end
 			else
+				if connection then
+					connection:Disconnect()
+					connection = nil
+				end
 				gameCamera.FieldOfView = oldfov
 			end
 		end,
 		Tooltip = 'Adjusts camera vision'
 	})
+
 	Value = FOV:CreateSlider({
 		Name = 'FOV',
 		Min = 30,
-		Max = 120
+		Max = 120,
+		Default = 70
 	})
 end)
 	
