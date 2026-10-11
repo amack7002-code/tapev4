@@ -1442,6 +1442,9 @@ local function downloadFile(path, func)
 		if not suc or res == '404: Not Found' then
 			error(res)
 		end
+		if res == '' then
+			error('empty file downloaded: '..path)
+		end
 		if path:find('.lua') then
 			res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'..res
 		end
@@ -3840,7 +3843,7 @@ function mainapi:CreateGUI()
 	logo.Parent = window
 	local logov4 = Instance.new('ImageLabel')
 	logov4.Name = 'V4Logo'
-	logov4.Size = UDim2.fromOffset(28, 16)
+	logov4.Size = UDim2.fromOffset(23, 16)
 	logov4.Position = UDim2.new(1, 1, 0, 1)
 	logov4.BackgroundTransparency = 1
 	logov4.Image = getcustomasset('aerov4/assets/new/guiv4.png')
