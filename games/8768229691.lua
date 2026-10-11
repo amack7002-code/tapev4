@@ -144,7 +144,7 @@ local function notif(...)
 end
 
 local function parsePositions(v, func)
-	if v:IsA('Part') and v.Size // 1 == v.Size then
+	if v:IsA('BasePart') and v.Size // 1 == v.Size then
 		local start = (v.Position - (v.Size / 2)) + Vector3.new(1.5, 1.5, 1.5)
 		for x = 0, v.Size.X - 1, 3 do
 			for y = 0, v.Size.Y - 1, 3 do
@@ -206,12 +206,12 @@ run(function()
 				local entity = {
 					Connections = {},
 					Character = char,
-					Health = (plr:GetAttribute('Health') or 100),
+					Health = plr and (plr:GetAttribute('Health') or hum.Health) or hum.Health,
 					Head = head,
 					Humanoid = hum,
 					HumanoidRootPart = humrootpart,
 					HipHeight = hum.HipHeight + (humrootpart.Size.Y / 2) + (hum.RigType == Enum.HumanoidRigType.R6 and 2 or 0),
-					MaxHealth = 100,
+					MaxHealth = hum.MaxHealth,
 					NPC = plr == nil,
 					Player = plr,
 					RootPart = humrootpart,
@@ -228,7 +228,8 @@ run(function()
 
 					for _, v in entitylib.getUpdateConnections(entity) do
 						table.insert(entity.Connections, v:Connect(function()
-							entity.Health = (plr:GetAttribute('Health') or 100)
+							entity.Health = plr and (plr:GetAttribute('Health') or hum.Health) or hum.Health
+							entity.MaxHealth = hum.MaxHealth
 							entitylib.Events.EntityUpdated:Fire(entity)
 						end))
 					end
@@ -242,8 +243,7 @@ run(function()
 	end
 
 	entitylib.getUpdateConnections = function(ent)
-		return {
-			ent.Player:GetAttributeChangedSignal('Health'),
+		local connections = {
 			{
 				Connect = function()
 					ent.Friend = ent.Player and isFriend(ent.Player) or nil
@@ -252,6 +252,13 @@ run(function()
 				end
 			}
 		}
+		if ent.Player then
+			table.insert(connections, ent.Player:GetAttributeChangedSignal('Health'))
+		else
+			table.insert(connections, ent.Humanoid:GetPropertyChangedSignal('Health'))
+			table.insert(connections, ent.Humanoid:GetPropertyChangedSignal('MaxHealth'))
+		end
+		return connections
 	end
 
 	entitylib.targetCheck = function(ent)
@@ -391,7 +398,7 @@ run(function()
 			v:Destroy()
 		end
 		table.clear(ControllerTable)
-		table.clear(RemoteTable)
+		table.clear(remotes)
 		table.clear(vapeEvents)
 		table.clear(skywars)
 		table.clear(store.blocks)
@@ -522,7 +529,9 @@ run(function()
 	local rand, old = Random.new()
 	
 	local function velocityFunction(velo, ...)
-		if rand:NextNumber(0, 100) > Chance.Value then return end
+		if rand:NextNumber(0, 100) > Chance.Value then
+			return old(velo, ...)
+		end
 		local check = (not Targeting.Enabled) or entitylib.EntityPosition({
 			Range = 50,
 			Part = 'RootPart',
@@ -531,7 +540,9 @@ run(function()
 		
 		if check then
 			local hort, vert = (Horizontal.Value / 100), (Vertical.Value / 100)
-			if hort == 0 and vert == 0 then return end
+			if hort == 0 and vert == 0 then
+				return
+			end
 			velo = Vector3.new(velo.X * hort, velo.Y * vert, velo.Z * hort)
 		end
 	
@@ -712,8 +723,8 @@ run(function()
 	local anims, armC0 = vape.Libraries.auraanims
 	
 	local function getAttackData()
-		if Mouse.Enabled then
-			if inputService:IsMouseButtonPressed(0) then return false end
+		if Mouse.Enabled and not inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+			return false
 		end
 	
 		return (not Limit.Enabled) and store.tools.sword or store.hand
@@ -782,7 +793,7 @@ run(function()
 	
 							for i, v in plrs do
 								local delta = (v.RootPart.Position - entitylib.character.RootPart.Position)
-								local angle = math.acos(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit))
+								local angle = math.acos(math.clamp(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit), -1, 1))
 								if angle > (math.rad(AngleCheck.Value) / 2) then continue end
 								table.insert(attacked, v)
 								targetinfo.Targets[v] = tick() + 1
@@ -800,7 +811,7 @@ run(function()
 							end
 						end
 	
-						if switched then
+						if switched and store.hand.Name then
 							skywars.Remotes[remotes.updateActiveItem](store.hand.Name)
 						end
 					end
@@ -1206,7 +1217,9 @@ run(function()
 									FireDelays[item] = tick() + 0.5
 									skywars.Remotes[remotes.updateActiveItem]:fire(item.Name)
 									skywars.Remotes[remotes.chargeBow]:fire(CFrame.new(offsetpos.Position, calc).LookVector, 1)
-									skywars.Remotes[remotes.updateActiveItem](store.hand.Name) 
+									if store.hand.Name then
+										skywars.Remotes[remotes.updateActiveItem](store.hand.Name)
+									end
 									break
 								end
 							end
@@ -1344,7 +1357,7 @@ run(function()
 	
 								local block = store.blocks[currentpos]
 								if not block then
-									blockpos = checkAdjacent(currentpos) and currentpos or blockProximity(currentpos)
+									local blockpos = checkAdjacent(currentpos) and currentpos or blockProximity(currentpos)
 									if blockpos then
 										local block = skywars.ItemMeta[wool.Rewrite.Type:gsub('{TeamId}', skywars.TeamController:getPlayerTeamId(lplr) or 'White')]
 										skywars.BlockController:placeBlock(blockpos, wool.Name, block, Vector3.zero)
@@ -1546,7 +1559,9 @@ run(function()
 		if (lplr:GetAttribute('Shield') or 0) <= 0 and getItem('Shield') then
 			skywars.Remotes[remotes.updateActiveItem]:fire('Shield')
 			skywars.Remotes[remotes.usePowerUp]:fire()
-			skywars.Remotes[remotes.updateActiveItem]:fire(store.hand.Name)
+			if store.hand.Name then
+				skywars.Remotes[remotes.updateActiveItem]:fire(store.hand.Name)
+			end
 		end
 	end
 	
@@ -1612,7 +1627,7 @@ run(function()
 						Size = UDim2.new(1, 89, 1, 52),
 						Position = UDim2.fromOffset(-48, -31),
 						BackgroundTransparency = 1,
-						Image = getcustomasset('newvape/assets/new/blur.png'),
+						Image = getcustomasset('aerov4/assets/new/blur.png'),
 						ScaleType = Enum.ScaleType.Slice,
 						SliceCenter = Rect.new(52, 31, 261, 502)
 					}),
@@ -1772,9 +1787,14 @@ run(function()
 					newCharacter(entitylib.character) 
 				end
 			else
-				if ViewmodelTool then 
-					ViewmodelTool:Destroy() 
+				if ViewmodelTool then
+					ViewmodelTool:Destroy()
+					ViewmodelTool = nil
 				end
+				if oldtool and oldtool:FindFirstChild('Handle') then
+					oldtool.Handle.LocalTransparencyModifier = 0
+				end
+				oldtool = nil
 			end
 		end,
 		Tooltip = 'Replaces the default viewmodel'
