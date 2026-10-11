@@ -8012,12 +8012,24 @@ end)
 run(function()
     local WaterAmbient
     local WaterColor
+    local WaterExpand
+    local WaterDepth
     local terrain = workspace:FindFirstChildOfClass('Terrain')
     local generation = 0
-    local waterRegion
-    local originalMaterials
-    local originalOccupancy
+    local savedChunks
     local originalWaterSettings
+    local MAX_CHUNK_STUDS = 512
+    local MAX_HALF_EXTENT = 2048
+    local MAX_DEPTH_STUDS = 32
+
+    local function getExpand()
+        return (WaterExpand and WaterExpand.Value) or 256
+    end
+
+    local function getDepth()
+        local d = (WaterDepth and WaterDepth.Value) or 12
+        return math.clamp(d, 4, MAX_DEPTH_STUDS)
+    end
 
     local function findMapBounds()
         local lowest, minX, maxX, minZ, maxZ
@@ -8031,11 +8043,18 @@ run(function()
             end
         end
         if lowest then
+            local expand = getExpand()
+            local cx = (minX + maxX) / 2
+            local cz = (minZ + maxZ) / 2
+            minX = math.max(minX - 512 - expand, cx - MAX_HALF_EXTENT)
+            maxX = math.min(maxX + 512 + expand, cx + MAX_HALF_EXTENT)
+            minZ = math.max(minZ - 512 - expand, cz - MAX_HALF_EXTENT)
+            maxZ = math.min(maxZ + 512 + expand, cz + MAX_HALF_EXTENT)
             return {
-                minX = minX - 64,
-				maxX = maxX + 512,
-                minZ = minZ - 64,
-                maxZ = maxZ + 64,
+                minX = minX,
+                maxX = maxX,
+                minZ = minZ,
+                maxZ = maxZ,
                 waterY = lowest - 7
             }
         end
@@ -8048,28 +8067,46 @@ run(function()
         params.FilterDescendantsInstances = {character.Character or lplr.Character}
         local hit = workspace:Raycast(rootPart.Position + Vector3.new(0, 4, 0), Vector3.new(0, -128, 0), params)
         local floorY = hit and hit.Position.Y or rootPart.Position.Y
+        local radius = math.min(768 + getExpand(), MAX_HALF_EXTENT)
         return {
-            minX = rootPart.Position.X - 512,
-            maxX = rootPart.Position.X + 512,
-            minZ = rootPart.Position.Z - 512,
-            maxZ = rootPart.Position.Z + 512,
+            minX = rootPart.Position.X - radius,
+            maxX = rootPart.Position.X + radius,
+            minZ = rootPart.Position.Z - radius,
+            maxZ = rootPart.Position.Z + radius,
             waterY = floorY - 7
         }
     end
 
-    local function makeWaterRegion(bounds)
-        return Region3.new(
-            Vector3.new(bounds.minX, bounds.waterY - 4, bounds.minZ),
-            Vector3.new(bounds.maxX, bounds.waterY, bounds.maxZ)
-        ):ExpandToGrid(4)
+    local function makeWaterRegions(bounds, depth)
+        local regions = {}
+        local y0 = bounds.waterY - depth
+        local y1 = bounds.waterY
+        local x = bounds.minX
+        while x < bounds.maxX do
+            local x2 = math.min(x + MAX_CHUNK_STUDS, bounds.maxX)
+            local z = bounds.minZ
+            while z < bounds.maxZ do
+                local z2 = math.min(z + MAX_CHUNK_STUDS, bounds.maxZ)
+                table.insert(regions, Region3.new(
+                    Vector3.new(x, y0, z),
+                    Vector3.new(x2, y1, z2)
+                ):ExpandToGrid(4))
+                z = z2
+            end
+            x = x2
+        end
+        return regions
     end
 
     local function restoreWater()
-        if terrain and waterRegion and originalMaterials and originalOccupancy then
-            local ok, err = pcall(function()
-                terrain:WriteVoxels(waterRegion, 4, originalMaterials, originalOccupancy)
-            end)
-            if not ok then warn('[WaterAmbient] failed to restore terrain: ' .. tostring(err)) end
+        if terrain and savedChunks then
+            for _, chunk in ipairs(savedChunks) do
+                local ok, err = pcall(function()
+                    terrain:WriteVoxels(chunk.Region, 4, chunk.Materials, chunk.Occupancy)
+                end)
+                if not ok then warn('[WaterAmbient] failed to restore terrain: ' .. tostring(err)) end
+                task.wait()
+            end
         end
         if terrain and originalWaterSettings then
             pcall(function()
@@ -8080,9 +8117,7 @@ run(function()
                 terrain.WaterWaveSpeed = originalWaterSettings.WaveSpeed
             end)
         end
-        waterRegion = nil
-        originalMaterials = nil
-        originalOccupancy = nil
+        savedChunks = nil
         originalWaterSettings = nil
     end
 
@@ -8091,7 +8126,8 @@ run(function()
         local bounds = findMapBounds()
         if not bounds then return end
 
-        waterRegion = makeWaterRegion(bounds)
+        local depth = getDepth()
+        local regions = makeWaterRegions(bounds, depth)
         originalWaterSettings = {
             Color = terrain.WaterColor,
             Transparency = terrain.WaterTransparency,
@@ -8099,20 +8135,45 @@ run(function()
             WaveSize = terrain.WaterWaveSize,
             WaveSpeed = terrain.WaterWaveSpeed
         }
+        local chunks = {}
         local ok, err = pcall(function()
-            local materials, occupancy = terrain:ReadVoxels(waterRegion, 4)
-            originalMaterials, originalOccupancy = materials, occupancy
-            terrain:FillBlock(waterRegion.CFrame, waterRegion.Size, Enum.Material.Water)
+            for _, region in ipairs(regions) do
+                if not WaterAmbient.Enabled or generation ~= currentGeneration then break end
+                local materials, occupancy = terrain:ReadVoxels(region, 4)
+                table.insert(chunks, {Region = region, Materials = materials, Occupancy = occupancy})
+                task.wait()
+            end
+        end)
+        if not ok or not WaterAmbient.Enabled or generation ~= currentGeneration then
+            savedChunks = chunks
+            restoreWater()
+            if not ok then warn('[WaterAmbient] failed to create terrain water: ' .. tostring(err)) end
+            return
+        end
+        savedChunks = chunks
+        local okFill, errFill = pcall(function()
+            for _, chunk in ipairs(chunks) do
+                if not WaterAmbient.Enabled or generation ~= currentGeneration then break end
+                terrain:FillBlock(chunk.Region.CFrame, chunk.Region.Size, Enum.Material.Water)
+                task.wait()
+            end
+        end)
+        if not okFill then
+            restoreWater()
+            warn('[WaterAmbient] failed to create terrain water: ' .. tostring(errFill))
+            return
+        end
+        if not WaterAmbient.Enabled or generation ~= currentGeneration then
+            restoreWater()
+            return
+        end
+        pcall(function()
             terrain.WaterColor = Color3.fromHSV(WaterColor.Hue, WaterColor.Sat, WaterColor.Value)
             terrain.WaterTransparency = 0.25
             terrain.WaterReflectance = 0.7
             terrain.WaterWaveSize = 0.13
             terrain.WaterWaveSpeed = 8
         end)
-        if not ok then
-            restoreWater()
-            warn('[WaterAmbient] failed to create terrain water: ' .. tostring(err))
-        end
     end
 
     WaterAmbient = vape.Categories.World:CreateModule({
@@ -8149,6 +8210,22 @@ run(function()
                 terrain.WaterColor = Color3.fromHSV(h, s, v)
             end
         end
+    })
+
+    WaterExpand = WaterAmbient:CreateSlider({
+        Name = 'Expand Size',
+        Min = 0,
+        Max = 1024,
+        Default = 256,
+        Tooltip = 'Extra padding around the water area. Re-toggle to apply.'
+    })
+
+    WaterDepth = WaterAmbient:CreateSlider({
+        Name = 'Water Depth',
+        Min = 4,
+        Max = 32,
+        Default = 12,
+        Tooltip = 'How deep the water is. Re-toggle to apply.'
     })
 end)
 
