@@ -1454,6 +1454,8 @@ local function downloadFile(path, func)
 end
 
 local customAssets = {
+	['aerov4/assets/new/tapelogo.png'] = true,
+	['aerov4/assets/new/v4_tape_top_big.png'] = true,
 	['aerov4/assets/new/guivape.png'] = true,
 	['aerov4/assets/new/guiv4.png'] = true,
 	['aerov4/assets/new/textvape.png'] = true,
@@ -1468,7 +1470,7 @@ getcustomasset = function(path)
 	local cached = customassetcache[path]
 	if cached then return cached end
 	local result = ''
-	if not inputService.TouchEnabled and assetfunction then
+	if assetfunction and (not inputService.TouchEnabled or customAssets[path]) then
 		if isfile(path) or customAssets[path] then
 			local ok, res = pcall(downloadFile, path, assetfunction)
 			if ok and res and res ~= '' then result = res end
@@ -1478,7 +1480,7 @@ getcustomasset = function(path)
 		local id = getcustomassets[path]
 		if id and id ~= '' then
 			result = id
-		elseif not inputService.TouchEnabled and assetfunction then
+		elseif assetfunction and (not inputService.TouchEnabled or customAssets[path]) then
 			local ok, res = pcall(downloadFile, path, assetfunction)
 			if ok and res then result = res end
 		end
@@ -3838,7 +3840,7 @@ function mainapi:CreateGUI()
 	logo.Size = UDim2.fromOffset(62, 18)
 	logo.Position = UDim2.fromOffset(11, 10)
 	logo.BackgroundTransparency = 1
-	logo.Image = getcustomasset('aerov4/assets/new/guivape.png')
+	logo.Image = getcustomasset('aerov4/assets/new/tapelogo.png')
 	logo.ImageColor3 = select(3, uipallet.Main:ToHSV()) > 0.5 and uipallet.Text or Color3.new(1, 1, 1)
 	logo.Parent = window
 	local logov4 = Instance.new('ImageLabel')
@@ -3846,7 +3848,7 @@ function mainapi:CreateGUI()
 	logov4.Size = UDim2.fromOffset(23, 16)
 	logov4.Position = UDim2.new(1, 1, 0, 1)
 	logov4.BackgroundTransparency = 1
-	logov4.Image = getcustomasset('aerov4/assets/new/guiv4.png')
+	logov4.Image = getcustomasset('aerov4/assets/new/v4_tape_top_big.png')
 	logov4.Parent = logo
 	local children = Instance.new('Frame')
 	children.Name = 'Children'
