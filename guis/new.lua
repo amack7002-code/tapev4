@@ -1454,6 +1454,8 @@ local function downloadFile(path, func)
 end
 
 local customAssets = {
+	['aerov4/assets/new/tapelogo_header.png'] = true,
+	['aerov4/assets/new/v4_tape_header.png'] = true,
 	['aerov4/assets/new/tapelogo.png'] = true,
 	['aerov4/assets/new/v4_tape_top_big.png'] = true,
 	['aerov4/assets/new/guivape.png'] = true,
@@ -3840,15 +3842,19 @@ function mainapi:CreateGUI()
 	logo.Size = UDim2.fromOffset(62, 18)
 	logo.Position = UDim2.fromOffset(11, 10)
 	logo.BackgroundTransparency = 1
-	logo.Image = getcustomasset('aerov4/assets/new/tapelogo.png')
+	logo.ScaleType = Enum.ScaleType.Fit
+	logo.ResampleMode = Enum.ResamplerMode.Default
+	logo.Image = getcustomasset('aerov4/assets/new/tapelogo_header.png')
 	logo.ImageColor3 = select(3, uipallet.Main:ToHSV()) > 0.5 and uipallet.Text or Color3.new(1, 1, 1)
 	logo.Parent = window
 	local logov4 = Instance.new('ImageLabel')
 	logov4.Name = 'V4Logo'
-	logov4.Size = UDim2.fromOffset(23, 16)
-	logov4.Position = UDim2.new(1, 1, 0, 1)
+	logov4.Size = UDim2.fromOffset(26, 18)
+	logov4.Position = UDim2.new(1, 1, 0, 0)
 	logov4.BackgroundTransparency = 1
-	logov4.Image = getcustomasset('aerov4/assets/new/v4_tape_top_big.png')
+	logov4.ScaleType = Enum.ScaleType.Fit
+	logov4.ResampleMode = Enum.ResamplerMode.Default
+	logov4.Image = getcustomasset('aerov4/assets/new/v4_tape_header.png')
 	logov4.Parent = logo
 	local children = Instance.new('Frame')
 	children.Name = 'Children'

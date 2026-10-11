@@ -1786,7 +1786,9 @@ function mainapi:CreateBar()
 	logo.Size = UDim2.fromOffset(62, 18)
 	logo.Position = UDim2.fromOffset(11, 11)
 	logo.BackgroundTransparency = 1
-	logo.Image = assetfunction and downloadFile('aerov4/assets/old/tapelogo.png', assetfunction) or ''
+	logo.ScaleType = Enum.ScaleType.Fit
+	logo.ResampleMode = Enum.ResamplerMode.Default
+	logo.Image = assetfunction and downloadFile('aerov4/assets/old/tapelogo_header.png', assetfunction) or ''
 	logo.ImageColor3 = uipallet.Text
 	logo.Parent = bar
 	local logov4 = Instance.new('ImageLabel')
@@ -1794,7 +1796,9 @@ function mainapi:CreateBar()
 	logov4.Size = UDim2.fromOffset(26, 18)
 	logov4.Position = UDim2.new(1, 1, 0, 0)
 	logov4.BackgroundTransparency = 1
-	logov4.Image = assetfunction and downloadFile('aerov4/assets/old/v4_tape_top_big.png', assetfunction) or ''
+	logov4.ScaleType = Enum.ScaleType.Fit
+	logov4.ResampleMode = Enum.ResamplerMode.Default
+	logov4.Image = assetfunction and downloadFile('aerov4/assets/old/v4_tape_header.png', assetfunction) or ''
 	logov4.ImageColor3 = uipallet.Text
 	logov4.Parent = logo
 	local settingsbutton = Instance.new('TextButton')
