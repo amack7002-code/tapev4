@@ -8014,6 +8014,7 @@ run(function()
     local WaterColor
     local WaterExpand
     local WaterDepth
+    local WaterHeight
     local terrain = workspace:FindFirstChildOfClass('Terrain')
     local generation = 0
     local savedChunks
@@ -8031,6 +8032,23 @@ run(function()
         return math.clamp(d, 4, MAX_DEPTH_STUDS)
     end
 
+    local function getHeight()
+        local h = (WaterHeight and WaterHeight.Value) or -7
+        return math.clamp(h, -30, 10)
+    end
+
+    local function groundUnderPlayer()
+        local character = entitylib.isAlive and entitylib.character
+        local rootPart = character and character.RootPart
+        if not rootPart or not rootPart.Parent then return nil end
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = {character.Character or lplr.Character}
+        local hit = workspace:Raycast(rootPart.Position + Vector3.new(0, 4, 0), Vector3.new(0, -2000, 0), params)
+        if hit then return hit.Position.Y end
+        return nil
+    end
+
     local function findMapBounds()
         local lowest, minX, maxX, minZ, maxZ
         for _, v in collectionService:GetTagged('block') do
@@ -8043,6 +8061,8 @@ run(function()
             end
         end
         if lowest then
+            local groundY = groundUnderPlayer()
+            if groundY then lowest = math.min(lowest, groundY) end
             local expand = getExpand()
             local cx = (minX + maxX) / 2
             local cz = (minZ + maxZ) / 2
@@ -8055,7 +8075,7 @@ run(function()
                 maxX = maxX,
                 minZ = minZ,
                 maxZ = maxZ,
-                waterY = lowest - 7
+                waterY = lowest + getHeight()
             }
         end
 
@@ -8065,7 +8085,7 @@ run(function()
         local params = RaycastParams.new()
         params.FilterType = Enum.RaycastFilterType.Exclude
         params.FilterDescendantsInstances = {character.Character or lplr.Character}
-        local hit = workspace:Raycast(rootPart.Position + Vector3.new(0, 4, 0), Vector3.new(0, -128, 0), params)
+        local hit = workspace:Raycast(rootPart.Position + Vector3.new(0, 4, 0), Vector3.new(0, -2000, 0), params)
         local floorY = hit and hit.Position.Y or rootPart.Position.Y
         local radius = math.min(768 + getExpand(), MAX_HALF_EXTENT)
         return {
@@ -8073,7 +8093,7 @@ run(function()
             maxX = rootPart.Position.X + radius,
             minZ = rootPart.Position.Z - radius,
             maxZ = rootPart.Position.Z + radius,
-            waterY = floorY - 7
+            waterY = floorY + getHeight()
         }
     end
 
@@ -8226,6 +8246,14 @@ run(function()
         Max = 32,
         Default = 12,
         Tooltip = 'How deep the water is. Re-toggle to apply.'
+    })
+
+    WaterHeight = WaterAmbient:CreateSlider({
+        Name = 'Water Height',
+        Min = -30,
+        Max = 10,
+        Default = -7,
+        Tooltip = 'Water surface height relative to the lowest ground. Lower = deeper under the map. Re-toggle to apply.'
     })
 end)
 
