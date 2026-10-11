@@ -3607,6 +3607,7 @@ run(function()
 	local headAttachments = {HatAttachment=true,HairAttachment=true,FaceFrontAttachment=true,FaceCenterAttachment=true,FaceBackAttachment=true}
 	local removeAccs = false
 	local bodyTransparency = 0
+	local bodyTransparencyEnabled = false
 	local originalBody = setmetatable({}, {__mode = 'k'})
 
 	local function restoreBody()
@@ -3618,10 +3619,12 @@ run(function()
 
 	local function applyHeadless(char)
 		if not char then return end
-		for _, part in char:GetChildren() do
-			if part:IsA('BasePart') and part.Name ~= 'Head' and part.Name ~= 'HumanoidRootPart' then
-				if originalBody[part] == nil then originalBody[part] = part.Transparency end
-				part.Transparency = math.max(originalBody[part], bodyTransparency)
+		if bodyTransparencyEnabled then
+			for _, part in char:GetChildren() do
+				if part:IsA('BasePart') and part.Name ~= 'Head' and part.Name ~= 'HumanoidRootPart' then
+					if originalBody[part] == nil then originalBody[part] = part.Transparency end
+					part.Transparency = math.max(originalBody[part], bodyTransparency)
+				end
 			end
 		end
 		local head = char:FindFirstChild("Head")
@@ -3700,13 +3703,24 @@ run(function()
 		Default = false
 	})
 
+	Headless:CreateToggle({
+		Name = 'Enable Body Transparency',
+		Default = false,
+		Tooltip = 'Apply the body transparency slider while keeping Headless enabled.',
+		Function = function(state)
+			bodyTransparencyEnabled = state
+			if not state then restoreBody() end
+			if Headless.Enabled then applyHeadless(lplr.Character) end
+		end
+	})
+
 	Headless:CreateSlider({
 		Name = 'Body Transparency',
 		Min = 0,
 		Max = 100,
 		Default = 0,
 		Suffix = '%',
-		Tooltip = '0% keeps your body visible, 100% hides it locally',
+		Tooltip = 'Used when Enable Body Transparency is on. 0% keeps your body visible, 100% hides it locally',
 		Function = function(value)
 			bodyTransparency = value / 100
 			if Headless.Enabled then applyHeadless(lplr.Character) end

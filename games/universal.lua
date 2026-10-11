@@ -1926,6 +1926,9 @@ run(function()
 	local Particles, Boxes, AttackDelay = {}, {}, tick()
 	
 	local function getAttackData()
+		local character = entitylib.character
+		if not entitylib.isAlive or not character or character.Character ~= lplr.Character
+			or not character.RootPart or not character.RootPart.Parent then return false end
 		if Mouse.Enabled and not inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
 			return false
 		end
@@ -1934,10 +1937,18 @@ run(function()
 		return tool and tool:FindFirstChildWhichIsA('TouchTransmitter', true) or nil, tool
 	end
 	
+	local function resetAuraCharacter()
+		AttackDelay = 0
+		for _, box in Boxes do box.Adornee = nil end
+		for _, particle in Particles do particle.Parent = nil end
+	end
+
 	Killaura = vape.Categories.Blatant:CreateModule({
 		Name = 'Killaura',
 		Function = function(callback)
 			if callback then
+				Killaura:Clean(entitylib.Events.LocalRemoved:Connect(resetAuraCharacter))
+				Killaura:Clean(entitylib.Events.LocalAdded:Connect(resetAuraCharacter))
 				repeat
 					local interest, tool = getAttackData()
 					local attacked = {}
@@ -8033,8 +8044,9 @@ run(function()
     end
 
     local function getHeight()
-        local h = (WaterHeight and WaterHeight.Value) or -7
-        return math.clamp(h, -30, 10)
+        local h = (WaterHeight and WaterHeight.Value) or -12
+        -- Older profiles may contain positive heights; never flood the ground.
+        return math.clamp(h, -100, -4)
     end
 
     local function groundUnderPlayer()
@@ -8043,7 +8055,13 @@ run(function()
         if not rootPart or not rootPart.Parent then return nil end
         local params = RaycastParams.new()
         params.FilterType = Enum.RaycastFilterType.Exclude
-        params.FilterDescendantsInstances = {character.Character or lplr.Character}
+        local characters = {}
+        for _, player in playersService:GetPlayers() do
+            if player.Character then table.insert(characters, player.Character) end
+        end
+        params.FilterDescendantsInstances = characters
+        params.IgnoreWater = true
+        params.RespectCanCollide = true
         local hit = workspace:Raycast(rootPart.Position + Vector3.new(0, 4, 0), Vector3.new(0, -2000, 0), params)
         if hit then return hit.Position.Y end
         return nil
@@ -8082,11 +8100,9 @@ run(function()
         local character = entitylib.isAlive and entitylib.character
         local rootPart = character and character.RootPart
         if not rootPart or not rootPart.Parent then return nil end
-        local params = RaycastParams.new()
-        params.FilterType = Enum.RaycastFilterType.Exclude
-        params.FilterDescendantsInstances = {character.Character or lplr.Character}
-        local hit = workspace:Raycast(rootPart.Position + Vector3.new(0, 4, 0), Vector3.new(0, -2000, 0), params)
-        local floorY = hit and hit.Position.Y or rootPart.Position.Y
+        local floorY = groundUnderPlayer()
+        -- Do not anchor water to an airborne character when no floor is loaded.
+        if not floorY then return nil end
         local radius = math.min(768 + getExpand(), MAX_HALF_EXTENT)
         return {
             minX = rootPart.Position.X - radius,
@@ -8099,8 +8115,9 @@ run(function()
 
     local function makeWaterRegions(bounds, depth)
         local regions = {}
-        local y0 = bounds.waterY - depth
-        local y1 = bounds.waterY
+        -- ExpandToGrid rounds upper bounds upward; snap the surface down first.
+        local y1 = math.floor(bounds.waterY / 4) * 4
+        local y0 = y1 - depth
         local x = bounds.minX
         while x < bounds.maxX do
             local x2 = math.min(x + MAX_CHUNK_STUDS, bounds.maxX)
@@ -8250,10 +8267,10 @@ run(function()
 
     WaterHeight = WaterAmbient:CreateSlider({
         Name = 'Water Height',
-        Min = -30,
-        Max = 10,
-        Default = -7,
-        Tooltip = 'Water surface height relative to the lowest ground. Lower = deeper under the map. Re-toggle to apply.'
+        Min = -100,
+        Max = -4,
+        Default = -12,
+        Tooltip = 'Water surface offset below the lowest ground. More negative = lower water. Re-toggle to apply.'
     })
 end)
 
@@ -8511,6 +8528,7 @@ run(function()
 	local headAttachments = {HatAttachment=true,HairAttachment=true,FaceFrontAttachment=true,FaceCenterAttachment=true,FaceBackAttachment=true}
 	local removeAccs = false
 	local bodyTransparency = 0
+	local bodyTransparencyEnabled = false
 	local originalBody = setmetatable({}, {__mode = 'k'})
 
 	local function restoreBody()
@@ -8522,10 +8540,12 @@ run(function()
 
 	local function applyHeadless(char)
 		if not char then return end
-		for _, part in char:GetChildren() do
-			if part:IsA('BasePart') and part.Name ~= 'Head' and part.Name ~= 'HumanoidRootPart' then
-				if originalBody[part] == nil then originalBody[part] = part.Transparency end
-				part.Transparency = math.max(originalBody[part], bodyTransparency)
+		if bodyTransparencyEnabled then
+			for _, part in char:GetChildren() do
+				if part:IsA('BasePart') and part.Name ~= 'Head' and part.Name ~= 'HumanoidRootPart' then
+					if originalBody[part] == nil then originalBody[part] = part.Transparency end
+					part.Transparency = math.max(originalBody[part], bodyTransparency)
+				end
 			end
 		end
 		local head = char:FindFirstChild("Head")
@@ -8604,13 +8624,24 @@ run(function()
 		Default = false
 	})
 
+	Headless:CreateToggle({
+		Name = 'Enable Body Transparency',
+		Default = false,
+		Tooltip = 'Apply the body transparency slider while keeping Headless enabled.',
+		Function = function(state)
+			bodyTransparencyEnabled = state
+			if not state then restoreBody() end
+			if Headless.Enabled then applyHeadless(lplr.Character) end
+		end
+	})
+
 	Headless:CreateSlider({
 		Name = 'Body Transparency',
 		Min = 0,
 		Max = 100,
 		Default = 0,
 		Suffix = '%',
-		Tooltip = '0% keeps your body visible, 100% hides it locally',
+		Tooltip = 'Used when Enable Body Transparency is on. 0% keeps your body visible, 100% hides it locally',
 		Function = function(value)
 			bodyTransparency = value / 100
 			if Headless.Enabled then applyHeadless(lplr.Character) end

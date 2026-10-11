@@ -8975,21 +8975,30 @@ run(function()
 		end)
 	end
 
+	local function resetAuraCharacter()
+		stopAutoShootLoop()
+		strike.nextAt, strike.interval = 0, nil
+		strike.used, strike.lastSrv = 0, 0
+		table.clear(strike.log)
+		lastTargetTime, AnimDelay, armC0 = 0, 0, nil
+		if AnimTween then AnimTween:Cancel() end
+		AnimTween = nil
+		Attacking = false
+		getgenv().Attacking = false
+		store.KillauraTarget = nil
+		if rangeRing then rangeRing.Adornee = nil end
+		for _, box in auraBoxes do box.Adornee = nil end
+		for _, spark in auraSparks do spark.Parent = nil end
+	end
+
 	Killaura = vape.Categories.Blatant:CreateModule({
 		Name = 'Killaura',
 		Function = function(callback)
 			if callback then
+				Killaura:Clean(entitylib.Events.LocalRemoved:Connect(resetAuraCharacter))
 				Killaura:Clean(entitylib.Events.LocalAdded:Connect(function()
-					stopAutoShootLoop()
-					strike.nextAt, strike.interval = 0, nil
-					strike.used, strike.lastSrv = 0, 0
-					table.clear(strike.log)
-					lastTargetTime, AnimDelay, armC0 = 0, 0, nil
-					if AnimTween then AnimTween:Cancel() end
-					Attacking = false
-					getgenv().Attacking = false
-					store.KillauraTarget = nil
-					if FastHits.Enabled then startAutoShootLoop() end
+					resetAuraCharacter()
+					if Killaura.Enabled and FastHits.Enabled then startAutoShootLoop() end
 				end))
 				lastTargetTime = 0
 				strike.nextAt, strike.interval = 0, nil
@@ -9023,7 +9032,7 @@ run(function()
 							local hand = viewmodel and viewmodel:FindFirstChild('RightHand')
 							local wrist = hand and hand:FindFirstChild('RightWrist')
 							if not entitylib.isAlive or not wrist then
-								going = false
+								going, lastWrist = false, nil
 								task.wait(0.05)
 								continue
 							end
@@ -9040,16 +9049,17 @@ run(function()
 									anims.Random = {{CFrame = CFrame.Angles(math.rad(math.random(1, 360)), math.rad(math.random(1, 360)), math.rad(math.random(1, 360))), Time = 0.12}}
 								end
 								for _, step in anims[AnimationMode.Value] do
-									if not entitylib.isAlive or not wrist.Parent then break end
+									if not entitylib.isAlive or not wrist.Parent or not armC0 or wrist ~= lastWrist then break end
 									AnimTween = tweenService:Create(wrist, TweenInfo.new(fresh and (AnimationTween.Enabled and 0.001 or 0.1) or step.Time / AnimationSpeed.Value, Enum.EasingStyle.Linear), {
 										C0 = armC0 * step.CFrame
 									})
 									AnimTween:Play()
 									AnimTween.Completed:Wait()
+									if not entitylib.isAlive or not armC0 then break end
 									fresh = false
 									if not Killaura.Enabled or not Attacking then break end
 								end
-							elseif going then
+							elseif going and armC0 then
 								going = false
 								AnimTween = tweenService:Create(wrist, TweenInfo.new(AnimationTween.Enabled and 0.001 or 0.3, Enum.EasingStyle.Exponential), {
 									C0 = armC0
@@ -18127,6 +18137,22 @@ run(function()
 	local upgradeRemote = replicatedStorage:WaitForChild("rbxts_include"):WaitForChild("node_modules"):WaitForChild("@rbxts"):WaitForChild("net"):WaitForChild("out"):WaitForChild("_NetManaged"):WaitForChild("RequestPurchaseTeamUpgrade")
 	local bedUpgradeRemote = replicatedStorage:WaitForChild("rbxts_include"):WaitForChild("node_modules"):WaitForChild("@rbxts"):WaitForChild("net"):WaitForChild("out"):WaitForChild("_NetManaged"):WaitForChild("RequestPurchaseBedTeamUpgrade")
 
+	local function getPurchaseInventory()
+		local character = entitylib.character
+		if not entitylib.isAlive or not character or character.Character ~= lplr.Character
+			or not character.RootPart or not character.RootPart.Parent then return nil end
+		local inventory = store.inventory and store.inventory.inventory
+		if not inventory or not inventory.items or not store.tools then return nil end
+		return inventory
+	end
+
+	local function getCurrentArmor()
+		local inventory = getPurchaseInventory()
+		local armor = inventory and inventory.armor
+		local chestplate = armor and armor[2]
+		return type(chestplate) == 'table' and chestplate or getBestArmor(1)
+	end
+
 	local function playerOwns(itemType)
 		for _, item in store.inventory.inventory.items do
 			if item.itemType == itemType then return true end
@@ -18207,8 +18233,7 @@ run(function()
 				if canBuy(v, currencytable) then
 					if SmartCheck.Enabled and (bedwars.ItemMeta[tools[i]] or {}).breakBlock and i > 2 then
 						if BuyArmorToggle.Enabled then
-							local armor = store.inventory.inventory.armor
-							local currentarmor = armor and armor[2] ~= 'empty' and armor[2] or getBestArmor(1)
+							local currentarmor = getCurrentArmor()
 							currentarmor = currentarmor and currentarmor.itemType or 'none'
 							if (table.find(armors, currentarmor) or 3) < 3 then break end
 						end
@@ -18300,11 +18325,15 @@ run(function()
 	local function buyBedBarrier()
 		local now = tick()
 		if now - lastBedBarrierBuy < BED_BARRIER_DURATION then return end
-		local ok = pcall(function()
-			bedUpgradeRemote:InvokeServer("bed_shield")
-			bedUpgradeRemote:InvokeServer("bed_alarm")
-		end)
-		if ok then
+		local purchased = false
+		for _, upgrade in {'bed_shield', 'bed_alarm'} do
+			local ok, result = pcall(function()
+				return bedUpgradeRemote:InvokeServer(upgrade)
+			end)
+			if ok and result then purchased = true end
+			if not ok then warn('[AutoBuy] bed upgrade failed: '..tostring(result)) end
+		end
+		if purchased then
 			lastBedBarrierBuy = now
 		end
 	end
@@ -18338,7 +18367,7 @@ run(function()
 					repeat
 						task.wait(0.5)
 						if not AutoBuy.Enabled then break end
-						if not entitylib.isAlive then continue end
+						if not getPurchaseInventory() then continue end
 						if store.matchState == 2 then continue end
 						if not store.shopLoaded then continue end
 						if BedwarsCheck.Enabled and not tostring(store.queueType):find('bedwars') then continue end
@@ -18356,8 +18385,7 @@ run(function()
 
 						if ItemShop.Enabled and canItems then
 							if BuyArmorToggle.Enabled then
-								local armor = store.inventory.inventory.armor
-								local currentarmor = armor and armor[2] ~= 'empty' and armor[2] or getBestArmor(1)
+								local currentarmor = getCurrentArmor()
 								buyTool(currentarmor, armors, currencytable)
 							end
 							if BuySwordToggle.Enabled then
