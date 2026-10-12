@@ -492,45 +492,92 @@ LegitAura = Killaura:CreateToggle({
 end)
 
 run(function()
-local old
-vape.Categories.Blatant:CreateModule({
-	Name = 'NoFall',
-	Function = function(callback)
-		if callback then 
-			old = hookfunction(bd.Blink.player_state.take_fall_damage.fire, function() end)
-		else
-			hookfunction(bd.Blink.player_state.take_fall_damage.fire, old)
-			old = nil
-		end
-	end,
-	Tooltip = 'Prevents taking fall damage.'
-})
+	local NoFall
+	local oldFire = nil
+
+	NoFall = vape.Categories.Blatant:CreateModule({
+		Name = "NoFall",
+		Function = function(callback)
+			local success, fallDamageFunc = pcall(function()
+				return bd.Blink.player_state.take_fall_damage.fire
+			end)
+
+			if not success or typeof(fallDamageFunc) ~= "function" then
+				return
+			end
+
+			if callback then
+				if not oldFire then
+					oldFire = hookfunction(fallDamageFunc, function()
+						return task.wait(9e9)
+					end)
+				end
+			else
+				if oldFire then
+					hookfunction(fallDamageFunc, oldFire)
+					oldFire = nil
+				end
+			end
+		end,
+		Tooltip = "Prevents taking fall damage"
+	})
 end)
 
 run(function()
-    local old
+	local NoSlowdown
+	local oldConstants = {}
+	local connection
 
-vape.Categories.Blatant:CreateModule({
-	Name = 'NoSlowdown',
-	Function = function(callback)
-		local func = debug.getproto(bd.MovementController.KnitStart, 7)
+	local function getTargetFunc()
+		local success, func = pcall(function()
+			return debug.getproto(bd.MovementController.KnitStart, 7)
+		end)
+		return success and func or nil
+	end
 
-		if callback then
-			old = debug.getconstants(func)
-			for i, v in old do
-				if type(v) == 'string' and (v:find('Client') or v == 'IsChargingBow') and v ~= 'ClientSneaking' then
-					debug.setconstant(func, i, 'IsSpectating')
+	local function applyNoSlow()
+		local func = getTargetFunc()
+		if not func then return end
+
+		if not next(oldConstants) then
+			oldConstants = debug.getconstants(func)
+		end
+
+		for i, v in pairs(oldConstants) do
+			if type(v) == "string" and (v:find("Client") or v == "IsChargingBow") and v ~= "ClientSneaking" then
+				debug.setconstant(func, i, "IsSpectating")
+			end
+		end
+	end
+
+	NoSlowdown = vape.Categories.Blatant:CreateModule({
+		Name = "NoSlowdown",
+		Function = function(callback)
+			if callback then
+				applyNoSlow()
+				connection = task.spawn(function()
+					while task.wait(1) do
+						if not NoSlowdown.Enabled then break end
+						applyNoSlow()
+					end
+				end)
+			else
+				if connection then
+					task.cancel(connection)
+					connection = nil
+				end
+
+				local func = getTargetFunc()
+				if func and next(oldConstants) then
+					for i, v in pairs(oldConstants) do
+						debug.setconstant(func, i, v)
+					end
+					table.clear(oldConstants)
 				end
 			end
-		else
-			for i, v in old do
-				debug.setconstant(func, i, v)
-			end
-			table.clear(old)
-		end
-	end,
-	Tooltip = 'Prevents slowing down when using items.'
-})
+		end,
+		Tooltip = "Prevents slowing down when using items"
+	})
 end)
 
 run(function()
