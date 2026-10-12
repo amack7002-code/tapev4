@@ -1820,6 +1820,8 @@ end)
 run(function()
 	local AutoWin
 	local previousStates
+	local worker
+	local status = 'Idle'
 
 	local Minigames = vape.Categories and vape.Categories.Minigames
 	if not Minigames or not Minigames.CreateModule then
@@ -1850,23 +1852,32 @@ run(function()
 				end
 
 				local eggs = collection('egg', AutoWin)
-				AutoWin:Clean(task.spawn(function()
+				local warnedNoTargets = false
+				worker = task.spawn(function()
 					while AutoWin.Enabled do
 						if not entitylib.isAlive then
+							status = 'Waiting for respawn'
 							task.wait(0.1)
 							continue
 						end
 
 						local root = entitylib.character and entitylib.character.RootPart
 						if not root or not root.Parent then
+							status = 'Waiting for character'
 							task.wait(0.1)
 							continue
 						end
 						local localTeamId = lplr:GetAttribute('TeamId')
+						if localTeamId == nil then
+							status = 'Waiting for team'
+							task.wait(0.1)
+							continue
+						end
+						local foundTarget = false
 						local targetEgg
 						local lowestHealth = math.huge
 						for _, egg in eggs do
-							if egg:GetAttribute('TeamId') == localTeamId then
+							if not egg.Parent or egg:GetAttribute('TeamId') == nil or egg:GetAttribute('TeamId') == localTeamId then
 								continue
 							end
 							local health = egg:GetAttribute('Health')
@@ -1882,6 +1893,8 @@ run(function()
 						end
 
 						if targetEgg then
+							foundTarget = true
+							status = 'Targeting egg'
 							local targetPosition = targetEgg.Position
 							if (root.Position - targetPosition).Magnitude > 6 then
 								local destination = targetPosition - root.CFrame.LookVector * 4
@@ -1902,6 +1915,10 @@ run(function()
 									end
 								end
 							end
+							if target then
+								foundTarget = true
+								status = 'Targeting player'
+							end
 							if target and nearestDistance > 6 then
 								local targetPosition = target.Position
 								local destination = targetPosition - root.CFrame.LookVector * 4
@@ -1909,10 +1926,26 @@ run(function()
 							end
 						end
 
+						if foundTarget then
+							warnedNoTargets = false
+						else
+							status = 'No eligible targets'
+							if not warnedNoTargets then
+								warnedNoTargets = true
+								notif('AutoWin', 'No eligible targets. Check the Y/Z skip limits and wait for enemies to spawn.', 5, 'alert')
+							end
+						end
 						task.wait(0.1)
 					end
-				end))
+				end)
+				local activeWorker = worker
+				AutoWin:Clean(function()
+					if coroutine.status(activeWorker) ~= 'dead' then task.cancel(activeWorker) end
+				end)
 			else
+				if worker and coroutine.status(worker) ~= 'dead' then task.cancel(worker) end
+				worker = nil
+				status = 'Idle'
 				if previousStates then
 					local Breaker = vape.Modules.Breaker
 					local Killaura = vape.Modules.Killaura
@@ -1926,13 +1959,14 @@ run(function()
 				end
 			end
 		end,
+		ExtraText = function() return status end,
 		Tooltip = 'Automatically targets enemy eggs and players'
 	})
 	SkipBelowY = AutoWin:CreateSlider({
 		Name = 'Skip targets below Y',
 		Min = -1000,
 		Max = 1000,
-		Default = math.clamp(math.max(workspace.FallenPartsDestroyHeight + 12, 0), -1000, 1000),
+		Default = math.clamp(workspace.FallenPartsDestroyHeight + 12, -1000, 1000),
 		Suffix = ' studs',
 		Tooltip = 'skip eggs and players at or below this height while AutoWin is enabled'
 	})
