@@ -68,13 +68,14 @@ local playersService = cloneref(game:GetService('Players'))
 local httpService = cloneref(game:GetService('HttpService'))
 local teleportService = cloneref(game:GetService('TeleportService'))
 
-local function downloadFile(path, func)
+local function downloadFile(path, func, repositoryPath)
 	if not isfile(path) then
 		local res
 		local success = false
+		repositoryPath = repositoryPath or select(1, path:gsub('^aerov4/', ''))
 		for attempt = 1, 3 do
 			local suc, result = pcall(function()
-				return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/' .. readfile('aerov4/profiles/commit.txt') .. '/' .. select(1, path:gsub('aerov4/', '')), true)
+				return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/' .. readfile('aerov4/profiles/commit.txt') .. '/' .. repositoryPath, true)
 			end)
 			if suc and result ~= '404: Not Found' then
 				res = result
@@ -257,11 +258,12 @@ if getgenv().Closet then
 end
 
 if not shared.VapeIndependent then
-	loadstring(downloadFile('aerov4/games/universal.lua'), 'universal')()
+	loadstring(downloadFile('aerov4/games/universal.lua', nil, 'games/universal/main.lua'), 'universal')()
 	local gameFileId = (game.GameId == 2619619496) and (game.PlaceId == 6872265039 and 6872265039 or 6872274481) or (game.GameId == 10516888336 and 10516888336 or game.PlaceId)
+	local gameRepositoryPath = 'games/' .. gameFileId .. '/main.lua'
 
 	if isfile('aerov4/games/' .. gameFileId .. '.lua') then
-		local gameSrc = downloadFile('aerov4/games/' .. gameFileId .. '.lua')
+		local gameSrc = downloadFile('aerov4/games/' .. gameFileId .. '.lua', nil, gameRepositoryPath)
 		local gameFunc, gameErr = loadstring(gameSrc, tostring(gameFileId))
 		if not gameFunc then
 			local ls = gameSrc:split('\n')
@@ -299,13 +301,13 @@ if not shared.VapeIndependent then
 				end
 				ctx = '\n\naround here:\n' .. table.concat(parts, '\n')
 			end
-			error('[aerov4] syntax error in ' .. gameFileId .. '.lua\n' .. msg .. where .. ctx)
+			error('[aerov4] syntax error in ' .. gameRepositoryPath .. '\n' .. msg .. where .. ctx)
 		end
 		gameFunc(...)
 	else
 		if not shared.VapeDeveloper then
 			local suc, res = pcall(function()
-				return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/' .. readfile('aerov4/profiles/commit.txt') .. '/games/' .. gameFileId .. '.lua', true)
+				return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/' .. readfile('aerov4/profiles/commit.txt') .. '/' .. gameRepositoryPath, true)
 			end)
 			if suc and res and res ~= '404: Not Found' then
 				local path = 'aerov4/games/' .. gameFileId .. '.lua'

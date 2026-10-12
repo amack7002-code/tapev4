@@ -1,0 +1,17 @@
+[
+  "Setup/EntitySetup.lua",
+  "Setup/SkywarsSetup.lua",
+  "Combat/AutoClicker.lua",
+  "Combat/Sprint.lua",
+  "Combat/Velocity.lua",
+  "Blatant/AntiFall.lua",
+  "Blatant/InvMove.lua",
+  "Blatant/Killaura.lua",
+  "Blatant/NoFall.lua",
+  "Blatant/NoSlowdown.lua",
+  "Blatant/ProjectileAimbot.lua",
+  "Blatant/ProjectileAura.lua",
+  "Utility/Scaffold.lua",
+  "Legit/Viewmodel.lua",
+  "Minigames/AutoWin.lua"
+]

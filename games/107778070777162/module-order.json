@@ -1,0 +1,13 @@
+[
+  "Blatant/AutoHatch.lua",
+  "Blatant/AutoTreadmillUpgrade.lua",
+  "Blatant/Disabler.lua",
+  "Blatant/AutoPlaceEgg.lua",
+  "Blatant/AutoRedeemCodex.lua",
+  "Combat/AutoBat.lua",
+  "Blatant/InstantCarry.lua",
+  "Utility/AntiReset.lua",
+  "Blatant/AutoSell.lua",
+  "Blatant/AutoEquipBest.lua",
+  "Render/TrapESP.lua"
+]

@@ -1,0 +1,9 @@
+[
+  "Blatant/AutoTrain.lua",
+  "Blatant/AutoLift.lua",
+  "Blatant/AutoBuyArms.lua",
+  "Blatant/AutoPops.lua",
+  "Blatant/AutoRoll.lua",
+  "Blatant/AutoGroupReward.lua",
+  "Utility/AutoRespawn.lua"
+]

@@ -1,0 +1,11 @@
+[
+  "Render/EggESP.lua",
+  "Blatant/AutoCollectEgg.lua",
+  "Blatant/AutoPlaceEgg.lua",
+  "Blatant/AutoHatch.lua",
+  "Blatant/AutoRebirth.lua",
+  "Blatant/AutoBuyUpgrade.lua",
+  "Utility/TeleportToBase.lua",
+  "Render/EggAlert.lua",
+  "Blatant/AutoFarm.lua"
+]

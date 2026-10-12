@@ -1,0 +1,15 @@
+[
+  "Setup/BedwarsSetup.lua",
+  "Blatant/Criticals.lua",
+  "Blatant/InvMove.lua",
+  "Blatant/Killaura.lua",
+  "Blatant/NoFall.lua",
+  "Blatant/NoSlowdown.lua",
+  "Blatant/NoSlowdown7.lua",
+  "Combat/AutoClicker.lua",
+  "Combat/Velocity.lua",
+  "Inventory/AutoBuy.lua",
+  "Utility/AutoPlay.lua",
+  "Utility/Scaffold.lua",
+  "World/Breaker.lua"
+]
