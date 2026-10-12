@@ -22,12 +22,13 @@ else
 end
 
 local vape
+local compile = loadstring
 local loadstring = function(...)
-	local res, err = loadstring(...)
+	local res, err = compile(...)
 	if err and vape then
 		vape:CreateNotification('tape v4', 'Failed to load : '..err, 30, 'alert')
 	end
-	return res
+	return res, err
 end
 local queue_on_teleport = queue_on_teleport or function() end
 local clear_teleport_queue = clear_teleport_queue or clearteleportqueue or function() end
