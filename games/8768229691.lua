@@ -1907,11 +1907,10 @@ run(function()
 								root.CFrame = CFrame.lookAt(destination, targetPosition)
 							end
 						end
-					end
 
-					task.wait(0.1)
-				end
-			end))
+						task.wait(0.1)
+					end
+				end))
 			else
 				if previousStates then
 					local Breaker = vape.Modules.Breaker
