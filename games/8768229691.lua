@@ -206,12 +206,12 @@ run(function()
 				local entity = {
 					Connections = {},
 					Character = char,
-					Health = plr and (plr:GetAttribute('Health') or hum.Health) or hum.Health,
+					Health = (plr:GetAttribute('Health') or 100),
 					Head = head,
 					Humanoid = hum,
 					HumanoidRootPart = humrootpart,
 					HipHeight = hum.HipHeight + (humrootpart.Size.Y / 2) + (hum.RigType == Enum.HumanoidRigType.R6 and 2 or 0),
-					MaxHealth = hum.MaxHealth,
+					MaxHealth = 100,
 					NPC = plr == nil,
 					Player = plr,
 					RootPart = humrootpart,
@@ -228,8 +228,7 @@ run(function()
 
 					for _, v in entitylib.getUpdateConnections(entity) do
 						table.insert(entity.Connections, v:Connect(function()
-							entity.Health = plr and (plr:GetAttribute('Health') or hum.Health) or hum.Health
-							entity.MaxHealth = hum.MaxHealth
+							entity.Health = (plr:GetAttribute('Health') or 100)
 							entitylib.Events.EntityUpdated:Fire(entity)
 						end))
 					end
@@ -243,7 +242,8 @@ run(function()
 	end
 
 	entitylib.getUpdateConnections = function(ent)
-		local connections = {
+		return {
+			ent.Player:GetAttributeChangedSignal('Health'),
 			{
 				Connect = function()
 					ent.Friend = ent.Player and isFriend(ent.Player) or nil
@@ -252,13 +252,6 @@ run(function()
 				end
 			}
 		}
-		if ent.Player then
-			table.insert(connections, ent.Player:GetAttributeChangedSignal('Health'))
-		else
-			table.insert(connections, ent.Humanoid:GetPropertyChangedSignal('Health'))
-			table.insert(connections, ent.Humanoid:GetPropertyChangedSignal('MaxHealth'))
-		end
-		return connections
 	end
 
 	entitylib.targetCheck = function(ent)
@@ -397,6 +390,12 @@ run(function()
 		for _, v in vapeEvents do
 			v:Destroy()
 		end
+		for _, playerConnections in entitylib.PlayerConnections do
+			for _, connection in playerConnections do
+				connection:Disconnect()
+			end
+		end
+		table.clear(entitylib.PlayerConnections)
 		table.clear(ControllerTable)
 		table.clear(remotes)
 		table.clear(vapeEvents)
@@ -408,6 +407,7 @@ run(function()
 	end)
 end)
 
+--vape remove thing
 for _, v in {'Reach', 'TriggerBot', 'Disabler', 'SilentAim', 'AutoRejoin', 'Rejoin', 'ServerHop', 'MurderMystery'} do
 	vape:Remove(v)
 end
@@ -540,9 +540,7 @@ run(function()
 		
 		if check then
 			local hort, vert = (Horizontal.Value / 100), (Vertical.Value / 100)
-			if hort == 0 and vert == 0 then
-				return
-			end
+			if hort == 0 and vert == 0 then return end
 			velo = Vector3.new(velo.X * hort, velo.Y * vert, velo.Z * hort)
 		end
 	
@@ -1416,7 +1414,7 @@ run(function()
 	
 				repeat
 					if entitylib.isAlive and not Open.Enabled then
-						local localPosition = entitylib.character.RootPart.Position
+									local localPosition = entitylib.character.RootPart.Position
 						for i, v in chests do
 							if v.PrimaryPart and (localPosition - v.PrimaryPart.Position).Magnitude <= Range.Value and not Delay[v] then
 								skywars.Remotes[remotes.openChest]:fire(v)
@@ -1800,4 +1798,62 @@ run(function()
 		Tooltip = 'Replaces the default viewmodel'
 	})
 end)
-	
+
+AutoWin = vape.Minigames:CreateModule({
+	Name = 'AutoWin',
+	Function = function(callback)
+		if callback then
+			-- Enable required modules
+			if Breaker and not Breaker.Enabled then
+				Breaker:Toggle(true)
+			end
+			if Killaura and not Killaura.Enabled then
+				Killaura:Toggle(true)
+			end
+
+			task.spawn(function()
+				while AutoWin.Enabled do
+					local targetEgg = nil
+					local lowestHealth = math.huge
+
+					-- Find the egg with the lowest health
+					local eggs = workspace:FindFirstChild("Eggs") or collection("egg")
+					if eggs then
+						for _, egg in pairs(eggs:GetChildren()) do
+							local health = egg:GetAttribute("Health")
+							if typeof(health) == "number" and health > 0 and health < lowestHealth then
+								lowestHealth = health
+								targetEgg = egg
+							end
+						end
+					end
+
+					-- Look at / go to the egg
+					if targetEgg and entitylib.character and entitylib.character.RootPart then
+						entitylib.character.RootPart.CFrame = CFrame.lookAlong(
+							targetEgg.Position,
+							entitylib.character.RootPart.CFrame.LookVector
+						)
+					else
+						-- No eggs left → look for an enemy player
+						for _, plr in pairs(playersService:GetPlayers()) do
+							if plr ~= lplr and plr:GetAttribute("TeamId") ~= lplr:GetAttribute("TeamId") then
+								local char = plr.Character
+								if char and char:FindFirstChild("HumanoidRootPart") then
+									entitylib.character.RootPart.CFrame = CFrame.lookAlong(
+										char.HumanoidRootPart.Position,
+										entitylib.character.RootPart.CFrame.LookVector
+									)
+									break
+								end
+							end
+						end
+					end
+
+					task.wait(0.1)
+				end
+			end)
+		end
+	end,
+	Tooltip = 'Automatically wins for you'
+})
