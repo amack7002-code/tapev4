@@ -1,25 +1,5 @@
--- bedwars ingame
-
-local _runCount = 0
-local _runBusy = false
 local run = function(func)
-	if not _runBusy then
-		_runBusy = true
-		_runCount = _runCount + 1
-		if _runCount % 8 == 0 then
-			task.wait()
-		end
-		local ok, err = pcall(func)
-		_runBusy = false
-		if not ok then
-			warn('[aerov4] module failed to load: ' .. tostring(err))
-		end
-		return
-	end
-	local ok, err = pcall(func)
-	if not ok then
-		warn('[aerov4] module failed to load: ' .. tostring(err))
-	end
+	func()
 end
 task.wait()
 local vapeEvents = setmetatable({}, {
@@ -139,6 +119,7 @@ local getcustomasset = vape.Libraries.getcustomasset
 local store = {
     attackReach = 0,
     attackReachUpdate = tick(),
+    damageBlockFail = tick(),
     hand = {},
     inventory = {
         inventory = {
@@ -165,6 +146,7 @@ local store = {
 getgenv().store = store
 local Reach = {}
 local HitBoxes = {}
+local InfiniteFly = {}
 local TrapDisabler
 local TrapSnap, TrapMine, TrapTeleport, TrapPortal = {}, {}, {}, {}
 local AntiFallPart
