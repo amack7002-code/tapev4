@@ -39,39 +39,56 @@ local function notif(...) return vape:CreateNotification(...) end
 
 local function disarmAnticheat(disarm)
 	local state = store.anticheat
-	if type(getloadedmodules) ~= 'function' then return nil end
-	local ok, modules = pcall(getloadedmodules)
-	if not ok then error('Cannot inspect BedFight client modules: '..tostring(modules)) end
-	for _, module in modules do
-		if module.Name == 'ClientModule' then
-			local loaded, client = pcall(require, module)
-			if loaded and type(client) == 'table' and not state.Tables[client] then
-				local catch = rawget(client, 'Catch')
-				if type(catch) == 'function' then
-					state.Tables[client] = catch
-					if debug and debug.getupvalue then
-						for index = 1, 8 do
-							local read, value = pcall(debug.getupvalue, catch, index)
-							if not read then break end
-							if value == true then state.Tripped = true; break end
+	state.Armed = not disarm
+	state.Errors = {}
+	-- Restoration uses the saved entries, even if discovery APIs have disappeared.
+	if disarm then
+		if not active then return nil, 'BedFight has unloaded' end
+		if type(getloadedmodules) ~= 'function' then return nil, 'getloadedmodules is unavailable' end
+		local ok, modules = pcall(getloadedmodules)
+		if not ok or type(modules) ~= 'table' then
+			local reason = ok and 'getloadedmodules returned a non-table' or tostring(modules)
+			state.Errors.Discovery = reason
+			return nil, reason
+		end
+		for _, module in modules do
+			if module.Name == 'ClientModule' then
+				local loaded, client = pcall(require, module)
+				if not loaded then
+					state.Errors[module] = tostring(client)
+				elseif type(client) == 'table' and not state.Tables[client] then
+					local original = rawget(client, 'Catch')
+					if type(original) == 'function' then
+						local entry = {Original = original}
+						entry.Wrapper = function(...)
+							-- A retained reference must stop intercepting immediately on disable.
+							if not active or state.Armed then return original(...) end
+							local reason = tostring(select(1, ...))
+							state.Blocked[reason] = (state.Blocked[reason] or 0) + 1
+							vapeEvents.AnticheatBlocked:Fire(reason)
 						end
+						state.Tables[client] = entry
 					end
 				end
 			end
 		end
 	end
-	local count = 0
-	for client, catch in state.Tables do
+	local count, hooked = 0, 0
+	for client, entry in state.Tables do
 		count += 1
-		if not (isreadonly and isreadonly(client)) then
-			rawset(client, 'Catch', disarm and function(reason)
-				reason = tostring(reason)
-				state.Blocked[reason] = (state.Blocked[reason] or 0) + 1
-				vapeEvents.AnticheatBlocked:Fire(reason)
-			end or catch)
+		local current = rawget(client, 'Catch')
+		local wanted = disarm and entry.Wrapper or entry.Original
+		local owned = current == entry.Wrapper
+		if current ~= wanted and (disarm and current == entry.Original or not disarm and owned) then
+			local ok, err = pcall(rawset, client, 'Catch', wanted)
+			if not ok then state.Errors[client] = tostring(err) end
+		elseif current ~= wanted then
+			state.Errors[client] = 'Catch was replaced externally; leaving it untouched'
 		end
+		if rawget(client, 'Catch') == entry.Wrapper then hooked += 1 end
 	end
-	state.Armed, state.Found = not disarm, count
+	state.Found, state.Hooked = count, hooked
+	if disarm then return hooked end
 	return count
 end
 run(function() disarmAnticheat(true) end)
@@ -248,9 +265,9 @@ end
 -- Register teardown before loading: partial startup must still release its connections.
 vape:Clean(function()
 	active = false
-	mergeRoot(nil, true)
-	syncTool()
 	run(function() disarmAnticheat(false) end)
+	run(function() mergeRoot(nil, true) end)
+	run(syncTool)
 	for _, event in vapeEvents do event:Destroy() end
 	table.clear(vapeEvents)
 end)
@@ -4437,20 +4454,25 @@ run(function()
 		Function = function(callback)
 			if callback then
 				userOff = false
-				local found = disarmAnticheat(true)
+				AntiCheatBypass:Clean(function()
+					disarmAnticheat(false)
+					uncover()
+				end)
+				local found, reason = disarmAnticheat(true)
 				if found == nil then
-					notif('AntiCheatBypass', 'Your executor cannot reach the game\'s anticheat (no getloadedmodules). Capes, bed visuals and speed changes can get this session flagged.', 15, 'alert')
+					notif('AntiCheatBypass', 'Client hooks unavailable: '..tostring(reason)..'. Protection is not confirmed.', 15, 'alert')
 				elseif store.anticheat.Tripped then
 					notif('AntiCheatBypass', 'The anticheat already went off this session, so your actions no longer reach the server. Rejoin to fix it.', 15, 'alert')
 				elseif found == 0 and vape.Loaded then
-					notif('AntiCheatBypass', 'The anticheat was not found yet. It is checked again whenever the game sends a new copy.', 8, 'warning')
+					notif('AntiCheatBypass', store.anticheat.Found and store.anticheat.Found > 0 and 'Client checks were found, but no hook could be installed. Inspect the hook errors; protection is not confirmed.' or 'No client hook is installed yet. New client copies are checked when they arrive.', 8, 'warning')
 				end
 
 				-- the server pulls back a root that has been off the ground too long, and it only follows
 				-- the real root. so that one stands on the ground below for a moment while you stay up
 				local air, standUntil = 0, nil
 				AntiCheatBypass:Clean(runService.Heartbeat:Connect(function(dt)
-					if not (Lagback.Enabled and entitylib.isAlive) or store.dashOn then
+					local character = entitylib.character
+					if not (AntiCheatBypass.Enabled and Lagback.Enabled and entitylib.isAlive and character and character.RootPart and character.RootPart.Parent and character.Humanoid) or store.dashOn then
 						air, standUntil = 0, nil
 						uncover()
 						return
@@ -4493,7 +4515,6 @@ run(function()
 						standUntil = tick() + STAND
 					end
 				end))
-				AntiCheatBypass:Clean(uncover)
 
 				AntiCheatBypass:Clean(vapeEvents.AnticheatBlocked.Event:Connect(function(reason)
 					if Notify.Enabled and not warned[reason] then
@@ -4502,11 +4523,12 @@ run(function()
 					end
 				end))
 			else
+				userOff = true
+				disarmAnticheat(false)
+				uncover()
 				table.clear(warned)
 				if vape.Loaded then
-					userOff = true
-					disarmAnticheat(false)
-					notif('AntiCheatBypass', 'The anticheat is live again. One detection now cuts you off from the server until you rejoin.', 10, 'alert')
+					notif('AntiCheatBypass', 'Client interception is disabled. Owned hooks were restored where writable; external hooks were left untouched.', 10, 'warning')
 				end
 			end
 		end,
