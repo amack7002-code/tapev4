@@ -48,6 +48,14 @@ local ViewmodelMotor
 local SkipBelowY
 local SkipAtZ
 
+local function skipAutoWinPosition(position)
+	local autoWin = vape.Modules.AutoWin
+	return autoWin and autoWin.Enabled and (
+		(SkipBelowY and position.Y <= SkipBelowY.Value)
+		or (SkipAtZ and position.Z >= SkipAtZ.Value)
+	) or false
+end
+
 local function collection(tags, module, customadd, customremove)
 	tags = typeof(tags) ~= 'table' and {tags} or tags
 	local objs, connections = {}, {}
@@ -727,6 +735,8 @@ run(function()
 			return false
 		end
 	
+		if not entitylib.isAlive or not entitylib.character or not entitylib.character.RootPart
+			or not lplr.Character then return nil end
 		return (not Limit.Enabled) and store.tools.sword or store.hand
 	end
 	
@@ -776,14 +786,14 @@ run(function()
 				repeat
 					local attacked = {}
 					local tool = getAttackData()
-					if tool and tool.Melee then
+					if tool and tool.Melee and tool.Name then
 						local plrs = entitylib.AllPosition({
 							Range = AttackRange.Value,
 							Wallcheck = Targets.Walls.Enabled or nil,
 							Part = 'RootPart',
 							Players = Targets.Players.Enabled,
 							NPCs = Targets.NPCs.Enabled,
-							Limit = Max.Value
+							Limit = math.max(Max.Value, #entitylib.List)
 						})
 						local switched = false
 	
@@ -792,10 +802,11 @@ run(function()
 							store.noShoot = tick() + 1
 	
 							for i, v in plrs do
+								if #attacked >= Max.Value then break end
+								if not v.Player or not v.RootPart or not v.RootPart.Parent or (v.Health or 0) <= 0 then continue end
 								local targetPosition = v.RootPart.Position
-								if targetPosition.Y <= SkipBelowY.Value then continue end
-								if v.Player and (v.Player:GetAttribute('InVoid') or v.Player:GetAttribute('PlayerConnected') == false) then continue end
-								if targetPosition.Z >= SkipAtZ.Value then continue end
+								if skipAutoWinPosition(targetPosition) then continue end
+								if v.Player:GetAttribute('InVoid') or v.Player:GetAttribute('PlayerConnected') == false then continue end
 								local delta = (targetPosition - entitylib.character.RootPart.Position)
 								if delta.X == 0 and delta.Z == 0 then continue end
 								local angle = math.acos(math.clamp(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit), -1, 1))
@@ -816,8 +827,8 @@ run(function()
 							end
 						end
 	
-						if switched and store.hand.Name then
-							skywars.Remotes[remotes.updateActiveItem](store.hand.Name)
+						if switched and store.hand and store.hand.Name and store.hand.Name ~= tool.Name then
+							skywars.Remotes[remotes.updateActiveItem]:fire(store.hand.Name)
 						end
 					end
 	
@@ -881,20 +892,6 @@ run(function()
 		Default = 10
 	})
 	Mouse = Killaura:CreateToggle({Name = 'Require mouse down'})
-	SkipBelowY = Killaura:CreateSlider({
-		Name = 'Skip targets below Y',
-		Min = -1000,
-		Max = 1000,
-		Default = math.clamp(math.max(workspace.FallenPartsDestroyHeight + 12, 0), -1000, 1000),
-		Suffix = ' studs'
-	})
-	SkipAtZ = Killaura:CreateSlider({
-		Name = 'Skip targets at/after Z',
-		Min = -10000,
-		Max = 10000,
-		Default = 10000,
-		Suffix = ' studs'
-	})
 	Swing = Killaura:CreateToggle({Name = 'No Swing'})
 	Killaura:CreateToggle({
 		Name = 'Show target',
@@ -1860,7 +1857,11 @@ run(function()
 							continue
 						end
 
-						local root = entitylib.character.RootPart
+						local root = entitylib.character and entitylib.character.RootPart
+						if not root or not root.Parent then
+							task.wait(0.1)
+							continue
+						end
 						local localTeamId = lplr:GetAttribute('TeamId')
 						local targetEgg
 						local lowestHealth = math.huge
@@ -1870,9 +1871,9 @@ run(function()
 							end
 							local health = egg:GetAttribute('Health')
 							local eggRoot = egg:IsA('Model') and (egg.PrimaryPart or egg:FindFirstChildWhichIsA('BasePart')) or egg
-							if eggRoot and typeof(health) == 'number' and health > 0 and health < lowestHealth then
+							if eggRoot and eggRoot.Parent and typeof(health) == 'number' and health > 0 and health < lowestHealth then
 								local eggPosition = eggRoot.Position
-								if eggPosition.Y <= SkipBelowY.Value or eggPosition.Z >= SkipAtZ.Value then
+								if skipAutoWinPosition(eggPosition) then
 									continue
 								end
 								lowestHealth = health
@@ -1890,9 +1891,9 @@ run(function()
 							local target
 							local nearestDistance = math.huge
 							for _, entity in entitylib.List do
-								if entity.Player and entity.Targetable and entity.Health > 0 and entity.RootPart then
+								if entity.Player and entity.Targetable and (entity.Health or 0) > 0 and entity.RootPart and entity.RootPart.Parent then
 									local targetPosition = entity.RootPart.Position
-									if targetPosition.Y <= SkipBelowY.Value or targetPosition.Z >= SkipAtZ.Value then continue end
+									if skipAutoWinPosition(targetPosition) then continue end
 									if entity.Player:GetAttribute('InVoid') or entity.Player:GetAttribute('PlayerConnected') == false then continue end
 									local distance = (root.Position - targetPosition).Magnitude
 									if distance < nearestDistance then
@@ -1925,6 +1926,22 @@ run(function()
 				end
 			end
 		end,
-		Tooltip = 'Automatically wins for you'
+		Tooltip = 'Automatically targets enemy eggs and players'
+	})
+	SkipBelowY = AutoWin:CreateSlider({
+		Name = 'Skip targets below Y',
+		Min = -1000,
+		Max = 1000,
+		Default = math.clamp(math.max(workspace.FallenPartsDestroyHeight + 12, 0), -1000, 1000),
+		Suffix = ' studs',
+		Tooltip = 'skip eggs and players at or below this height while AutoWin is enabled'
+	})
+	SkipAtZ = AutoWin:CreateSlider({
+		Name = 'Skip targets at/after Z',
+		Min = -10000,
+		Max = 10000,
+		Default = 10000,
+		Suffix = ' studs',
+		Tooltip = 'skip eggs and players at or beyond this Z coordinate while AutoWin is enabled'
 	})
 end)
