@@ -5470,6 +5470,8 @@ run(function()
     local flyCooldownActive = false
     local lastGroundTouchTime = 0
     local MAX_FLY_TIME = 2.5
+    local TP_DOWN_INTERVAL = 2
+    local tpReturning = false
     local tick = tick
     local task_wait = task.wait
     local math_max = math.max
@@ -5519,7 +5521,7 @@ run(function()
     local function updateProgressBar()
         if not FlyAnywayProgressBarFrame then return end
 
-        if (TP and TP.Enabled) or not entitylib.isAlive then
+        if not Fly.Enabled or not entitylib.isAlive or not lplr.Character then
             FlyAnywayProgressBarFrame.Visible = false
             return
         end
@@ -5540,6 +5542,14 @@ run(function()
             return
         end
         
+        if TP and TP.Enabled then
+            local timeLeft = math_max(0, TP_DOWN_INTERVAL - airTime)
+            FlyAnywayProgressBarFrame.Frame.Size = udim2new(timeLeft / TP_DOWN_INTERVAL, 0, 0, 20)
+            FlyAnywayProgressBarFrame.TextLabel.Text = tpReturning and 'Returning' or string_format('TP Down: %.1fs', timeLeft)
+            FlyAnywayProgressBarFrame.Visible = FlyAnywayProgressBar.Enabled
+            return
+        end
+
         progressBarFrameCounter = (progressBarFrameCounter + 1) % MAX_FRAME_COUNTER
         if progressBarFrameCounter % 3 == 0 then
             local hipHeight = entitylib.character.Humanoid.HipHeight
@@ -5591,6 +5601,13 @@ run(function()
                 up, down, old = 0, 0, bedwars.BalloonController.deflateBalloon
                 bedwars.BalloonController.deflateBalloon = function() end
                 local tpTick, tpToggle, oldy = tick(), true
+                lastGroundTime = tick()
+                airTime = 0
+                tpReturning = false
+                groundtime = nil
+                onground = false
+                cachedBalloonCount = lplr.Character and lplr.Character:GetAttribute('InflatedBalloons') or 0
+                cachedMatchState = store.matchState
 
                 if lplr.Character and (lplr.Character:GetAttribute('InflatedBalloons') or 0) == 0 and getItem('balloon') then
                     bedwars.BalloonController:inflateBalloon()
@@ -5664,13 +5681,14 @@ run(function()
 
                         if not flyAllowed then
                             if tpToggle then
-                                if airTime > 2 then  
+                                if airTime > TP_DOWN_INTERVAL then
                                     if not oldy then
                                         rayCheck.FilterDescendantsInstances = {lplr.Character, gameCamera, AntiVoidPart}
                                         rayCheck.CollisionGroup = root.CollisionGroup
                                         local ray = workspace:Raycast(root.Position, vector3new(0, -1000, 0), rayCheck)
                                         if ray and TP.Enabled then
                                             tpToggle = false
+                                            tpReturning = true
                                             oldy = root.Position.Y
                                             tpTick = now + 0.11
                                             root.CFrame = cframeLookAlong(vector3new(root.Position.X, ray.Position.Y + entitylib.character.HipHeight, root.Position.Z), root.CFrame.LookVector)
@@ -5683,6 +5701,7 @@ run(function()
                                         local newpos = vector3new(root.Position.X, oldy, root.Position.Z)
                                         root.CFrame = cframeLookAlong(newpos, root.CFrame.LookVector)
                                         tpToggle = true
+                                        tpReturning = false
                                         oldy = nil
                                     else
                                         mass = 0
@@ -5761,6 +5780,8 @@ run(function()
                 lastonground = nil
                 groundtime = nil
                 flyCooldownActive = false
+                tpReturning = false
+                airTime = 0
                 bedwars.BalloonController.deflateBalloon = old
                 if PopBalloons.Enabled and entitylib.isAlive and (lplr.Character:GetAttribute('InflatedBalloons') or 0) > 0 then
                     for _ = 1, 3 do
@@ -5850,7 +5871,7 @@ run(function()
                 end
             end
         end,
-        Tooltip = "show amount of time for fly",
+        Tooltip = "shows time until TP Down, or remaining fly time when TP Down is off",
         Default = true
     })
     BarColor = Fly:CreateColorSlider({
@@ -5869,8 +5890,10 @@ run(function()
         Name = 'TP Down',
         Default = true,
         Function = function(callback)
-            if callback and FlyAnywayProgressBarFrame then
-                FlyAnywayProgressBarFrame.Visible = false
+            groundtime = nil
+            onground = false
+            if FlyAnywayProgressBarFrame then
+                updateProgressBar()
             end
         end
     })
