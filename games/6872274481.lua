@@ -18089,6 +18089,14 @@ run(function()
 	local DiamondGenToggle
 	local TeamGenToggle
 	local BedBarrierToggle
+	local PurchaseDelay
+	local PurchaseLimit
+	local GearPriority
+	local Notifications
+	local Reserves = {}
+	local purchaseCooldowns = {}
+	local currencySnapshots = {}
+	local cyclePurchases = 0
 	local Custom = {}
 	local CustomPost = {}
 	local ExtraUpgrades = {}
@@ -18166,11 +18174,21 @@ run(function()
 	end
 
 	local function canBuy(item, currencytable, amount)
-		if not item or type(item.currency) ~= 'string' or type(item.price) ~= 'number' then return false end
+		if not item or type(item.currency) ~= 'string' or type(item.price) ~= 'number'
+			or item.price < 0 or item.price ~= item.price or item.price == math.huge then return false end
 		amount = amount or 1
-		if not currencytable[item.currency] then
+		if amount <= 0 or amount ~= amount or amount == math.huge then return false end
+		if currencytable[item.currency] == nil then
 			local currency = getItem(item.currency)
-			currencytable[item.currency] = currency and currency.amount or 0
+			local balance = currency and currency.amount or 0
+			local snapshot = currencySnapshots[item.currency]
+			if snapshot and snapshot.character == lplr.Character and snapshot.balance == balance and tick() < snapshot.expires then
+				balance = math.min(balance, snapshot.remaining)
+			else
+				currencySnapshots[item.currency] = nil
+			end
+			local reserve = Reserves[item.currency]
+			currencytable[item.currency] = math.max(balance - (reserve and reserve.Value or 0), 0)
 		end
 		if item.ignoredByKit and table.find(item.ignoredByKit, store.equippedKit or '') then return false end
 		if item.lockedByForge or item.disabled then return false end
@@ -18184,36 +18202,62 @@ run(function()
 		return currencytable[item.currency] >= (item.price * amount)
 	end
 
+	local function recordSpend(currency, price, currencytable)
+		currencytable[currency] -= price
+		local balance = getItem(currency)
+		local reserve = Reserves[currency]
+		currencySnapshots[currency] = {
+			balance = balance and balance.amount or 0,
+			remaining = currencytable[currency] + (reserve and reserve.Value or 0),
+			character = lplr.Character,
+			expires = tick() + 3
+		}
+	end
+
 	local function buyItem(item, currencytable, shopId)
 		shopId = shopId or id
-		if not shopId then return end
-		if not canBuy(item, currencytable) then return end
-		local meta = bedwars.ItemMeta[item.itemType]
-		currencytable[item.currency] -= item.price
-		bedwars.Client:Get('BedwarsPurchaseItem'):CallServerAsync({
-			shopItem = item,
-			shopId = shopId
-		}):andThen(function(suc)
-			if suc then
-				notif('AutoBuy', 'Bought '..(meta and meta.displayName or item.itemType), 3)
-				local soundManager = bedwars.SoundManager
-				local playSound = soundManager and soundManager.playSound
-				local soundList = bedwars.SoundList
-				local purchaseSound = soundList and soundList.BEDWARS_PURCHASE_ITEM
-				if type(playSound) == 'function' and purchaseSound then
-					pcall(playSound, soundManager, purchaseSound)
-				end
-				bedwars.Store:dispatch({
-					type = 'BedwarsAddItemPurchased',
-					itemType = item.itemType
-				})
-				if item.tiered then
-					bedwars.BedwarsShopController.alreadyPurchasedMap[item.itemType] = true
-				end
-			end
-		end):catch(function(err)
-			warn('[AutoBuy] purchase failed: '..tostring(err))
+		if not AutoBuy.Enabled or not getPurchaseInventory() or not shopId then return false end
+		if cyclePurchases >= PurchaseLimit.Value or not canBuy(item, currencytable) then return false end
+		local cooldown = purchaseCooldowns[item.itemType]
+		if cooldown and cooldown.character == lplr.Character and tick() < cooldown.expires then return false end
+		local character = lplr.Character
+		cyclePurchases += 1
+		purchaseCooldowns[item.itemType] = {character = character, expires = tick() + 5}
+		-- Reserve before yielding so disabling the module cannot lose an in-flight purchase.
+		recordSpend(item.currency, item.price, currencytable)
+		local ok, resolved, purchased = pcall(function()
+			return bedwars.Client:Get('BedwarsPurchaseItem'):CallServerAsync({
+				shopItem = item,
+				shopId = shopId
+			}):timeout(3):await()
 		end)
+		purchaseCooldowns[item.itemType] = {character = character, expires = tick() + 2}
+		local snapshot = currencySnapshots[item.currency]
+		if snapshot and snapshot.character == character then snapshot.expires = tick() + 3 end
+		if not ok or not resolved then
+			-- Keep the reservation briefly: a timeout may still have reached the server.
+			warn('[AutoBuy] purchase failed: '..tostring(ok and purchased or resolved))
+			return false
+		end
+		if not purchased then
+			if character == lplr.Character then recordSpend(item.currency, -item.price, currencytable) end
+			return false
+		end
+		if character ~= lplr.Character then return true end
+		local meta = bedwars.ItemMeta[item.itemType]
+		if Notifications.Enabled then
+			notif('AutoBuy', 'Bought '..(meta and meta.displayName or item.itemType), 3)
+		end
+		local soundManager = bedwars.SoundManager
+		local purchaseSound = bedwars.SoundList and bedwars.SoundList.BEDWARS_PURCHASE_ITEM
+		if soundManager and type(soundManager.playSound) == 'function' and purchaseSound then
+			pcall(soundManager.playSound, soundManager, purchaseSound)
+		end
+		bedwars.Store:dispatch({type = 'BedwarsAddItemPurchased', itemType = item.itemType})
+		if item.tiered then
+			bedwars.BedwarsShopController.alreadyPurchasedMap[item.itemType] = true
+		end
+		return true
 	end
 
 	local function buyTool(tool, tools, currencytable)
@@ -18258,22 +18302,38 @@ run(function()
 		if upgrade.disabledInQueue and table.find(upgrade.disabledInQueue, store.queueType) then return end
 		local currentUpgrades = bedwars.Store:getState().Bedwars.teamUpgrades[lplr:GetAttribute('Team')] or {}
 		local currentTier = (currentUpgrades[upgradeType] or 0) + 1
+		local key = 'upgrade:'..upgradeType
+		local cooldown = purchaseCooldowns[key]
+		if cooldown and cooldown.character == lplr.Character and tick() < cooldown.expires then return end
 
 		for i = currentTier, #upgrade.tiers do
+			if not AutoBuy.Enabled or not getPurchaseInventory() or cyclePurchases >= PurchaseLimit.Value then break end
 			local tier = upgrade.tiers[i]
 			if tier.availableOnlyInQueue and not table.find(tier.availableOnlyInQueue, store.queueType) then break end
 
 			if canBuy({currency = 'diamond', price = tier.cost}, currencytable) then
+				cyclePurchases += 1
+				local character = lplr.Character
+				purchaseCooldowns[key] = {character = character, expires = tick() + 5}
+				recordSpend('diamond', tier.cost, currencytable)
 				local ok, purchased = pcall(function()
 					return upgradeRemote:InvokeServer(upgradeType)
 				end)
+				purchaseCooldowns[key] = {character = character, expires = tick() + 2}
+				local snapshot = currencySnapshots.diamond
+				if snapshot and snapshot.character == character then snapshot.expires = tick() + 3 end
 				if not ok then
 					warn('[AutoBuy] upgrade failed: '..tostring(purchased))
 					break
 				end
-				if not purchased then break end
-				notif('AutoBuy', 'Bought '..(upgrade.name == 'Armor' and 'Protection' or upgrade.name)..' '..i, 3)
-				currencytable.diamond -= tier.cost
+				if character ~= lplr.Character then break end
+				if not purchased then
+					recordSpend('diamond', -tier.cost, currencytable)
+					break
+				end
+				if Notifications.Enabled then
+					notif('AutoBuy', 'Bought '..(upgrade.name == 'Armor' and 'Protection' or upgrade.name)..' '..i, 3)
+				end
 			else
 				break
 			end
@@ -18294,10 +18354,14 @@ run(function()
 
 	local function getNearestShopId()
 		if not entitylib.isAlive then return nil end
+		if not getPurchaseInventory() then return nil end
 		local localPosition = entitylib.character.RootPart.Position
 		local shopId
+		local nearest = 20
 		for _, v in (store.shop or {}) do
-			if v.Shop and v.RootPart and v.RootPart.Parent and (v.RootPart.Position - localPosition).Magnitude <= 20 then
+			local distance = v.RootPart and v.RootPart.Parent and (v.RootPart.Position - localPosition).Magnitude
+			if v.Shop and distance and distance <= nearest then
+				nearest = distance
 				shopId = v.Id
 			end
 		end
@@ -18323,10 +18387,15 @@ run(function()
 	local BED_BARRIER_DURATION = 180
 
 	local function buyBedBarrier()
+		-- This remote exposes no price metadata here; do not risk spending reserved diamonds.
+		if Reserves.diamond.Value > 0 then return end
 		local now = tick()
 		if now - lastBedBarrierBuy < BED_BARRIER_DURATION then return end
+		lastBedBarrierBuy = now - BED_BARRIER_DURATION + 5
 		local purchased = false
 		for _, upgrade in {'bed_shield', 'bed_alarm'} do
+			if not AutoBuy.Enabled or not getPurchaseInventory() or cyclePurchases >= PurchaseLimit.Value then break end
+			cyclePurchases += 1
 			local ok, result = pcall(function()
 				return bedUpgradeRemote:InvokeServer(upgrade)
 			end)
@@ -18339,13 +18408,9 @@ run(function()
 	end
 
 	local function runCustom(tab, currencytable)
-		local keys = {}
-		for k in tab do
-			table.insert(keys, k)
-		end
-		table.sort(keys)
-		for _, k in keys do
-			tab[k](currencytable)
+		for _, entry in tab do
+			if not AutoBuy.Enabled or cyclePurchases >= PurchaseLimit.Value then break end
+			entry.buy(currencytable)
 		end
 	end
 
@@ -18365,7 +18430,7 @@ run(function()
 					repeat task.wait() until store.shopLoaded or not AutoBuy.Enabled
 					if not AutoBuy.Enabled then return end
 					repeat
-						task.wait(0.5)
+						task.wait(PurchaseDelay.Value / 1000)
 						if not AutoBuy.Enabled then break end
 						if not getPurchaseInventory() then continue end
 						if store.matchState == 2 then continue end
@@ -18378,18 +18443,25 @@ run(function()
 						local canItems = items or not GUICheck.Enabled
 						local canUpgrades = upgrades or not GUICheck.Enabled
 						local currencytable = {}
+						cyclePurchases = 0
 
 						if canItems then
 							runCustom(Custom, currencytable)
 						end
 
 						if ItemShop.Enabled and canItems then
-							if BuyArmorToggle.Enabled then
-								local currentarmor = getCurrentArmor()
-								buyTool(currentarmor, armors, currencytable)
+							local function buyArmor()
+								if BuyArmorToggle.Enabled then buyTool(getCurrentArmor(), armors, currencytable) end
 							end
-							if BuySwordToggle.Enabled then
-								buyTool(store.tools.sword, getSwordList(), currencytable)
+							local function buySword()
+								if BuySwordToggle.Enabled then buyTool(store.tools.sword, getSwordList(), currencytable) end
+							end
+							if GearPriority.Value == 'Sword First' then
+								buySword()
+								buyArmor()
+							else
+								buyArmor()
+								buySword()
 							end
 							if BuyAxeToggle.Enabled then
 								buyTool(store.tools.wood or {itemType = 'none'}, axes, currencytable)
@@ -18429,6 +18501,26 @@ run(function()
 		end,
 		Tooltip = 'auto buys from the shops u turn on when ur near them'
 	})
+
+	PurchaseDelay = AutoBuy:CreateSlider({
+		Name = 'Purchase Delay', Min = 200, Max = 2000, Default = 500, Suffix = 'ms',
+		Tooltip = 'time between purchase cycles'
+	})
+	PurchaseLimit = AutoBuy:CreateSlider({
+		Name = 'Purchases Per Cycle', Min = 1, Max = 10, Default = 4,
+		Tooltip = 'maximum purchase requests per cycle, including failed attempts'
+	})
+	GearPriority = AutoBuy:CreateDropdown({
+		Name = 'Gear Priority', List = {'Armor First', 'Sword First'}, Default = 'Armor First'
+	})
+	Notifications = AutoBuy:CreateToggle({Name = 'Purchase Notifications', Default = true})
+	for _, currency in {'iron', 'diamond', 'emerald'} do
+		Reserves[currency] = AutoBuy:CreateSlider({
+			Name = currency:sub(1, 1):upper()..currency:sub(2)..' Reserve',
+			Min = 0, Max = currency == 'iron' and 200 or 40, Default = 0,
+			Tooltip = 'keep this much '..currency..'; a diamond reserve also pauses bed barrier purchases'
+		})
+	end
 
 	ItemShop = AutoBuy:CreateToggle({
 		Name = 'Item Shop',
@@ -18539,23 +18631,29 @@ run(function()
 			for _, entry in list do
 				local tab = entry:split('/')
 				local ind = tonumber(tab[1])
-				if ind and tab[2] then
-					(tab[4] and CustomPost or Custom)[ind] = function(currencytable)
+				if ind and ind == ind and math.abs(ind) ~= math.huge and tab[2] and tab[2] ~= '' then
+					local target = tab[4] and tab[4] ~= '' and CustomPost or Custom
+					table.insert(target, {priority = ind, order = #target + 1, buy = function(currencytable)
 						local v = bedwars.Shop.getShopItem(tab[2], lplr, {shopId = id})
 						if not v then return end
 						local amount = tonumber(tab[3]) or 1
 						local woolName = (tab[2] == 'wool_white' and bedwars.Shop.getTeamWool) and bedwars.Shop.getTeamWool(lplr:GetAttribute('Team')) or tab[2]
 						local item = getItem(woolName or tab[2])
 						local bundle = v.amount or 1
-						if bundle <= 0 or amount <= 0 or amount ~= amount or amount == math.huge then return end
+						if type(bundle) ~= 'number' or bundle <= 0 or bundle ~= bundle or bundle == math.huge
+							or amount <= 0 or amount ~= amount or amount == math.huge then return end
 						local count = math.ceil(math.max(amount - (item and item.amount or 0), 0) / bundle)
-						if count > 0 and canBuy(v, currencytable, count) then
-							for _ = 1, count do
-								buyItem(v, currencytable)
-							end
+						if count > 0 and canBuy(v, currencytable) then
+							-- Refill incrementally; wait for inventory replication before buying this item again.
+							buyItem(v, currencytable)
 						end
-					end
+					end})
 				end
+			end
+			for _, target in {Custom, CustomPost} do
+				table.sort(target, function(a, b)
+					return a.priority < b.priority or (a.priority == b.priority and a.order < b.order)
+				end)
 			end
 		end
 	})
