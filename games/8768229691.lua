@@ -1995,7 +1995,7 @@ run(function()
 							end
 							if target and nearestDistance > 6 then
 								local targetPosition = target.Position
-								local destination = targetPosition - root.CFrame.LookVector * 4
+								local destination = targetPosition + Vector3.new(0, 8, 0) -- above them
 								root.CFrame = CFrame.lookAt(destination, targetPosition)
 							end
 						end
