@@ -1936,20 +1936,20 @@ run(function()
 					while AutoWin.Enabled do
 						if not entitylib.isAlive then
 							status = 'Waiting for respawn'
-							task.wait(0.1)
+							task.wait()
 							continue
 						end
 
 						local root = entitylib.character and entitylib.character.RootPart
 						if not root or not root.Parent then
 							status = 'Waiting for character'
-							task.wait(0.1)
+							task.wait()
 							continue
 						end
 						local localTeamId = lplr:GetAttribute('TeamId')
 						if localTeamId == nil then
 							status = 'Waiting for team'
-							task.wait(0.1)
+							task.wait()
 							continue
 						end
 						local foundTarget = false
@@ -2009,7 +2009,7 @@ run(function()
 								notif('AutoWin', 'No eligible targets. Waiting for enemy players or eggs to spawn.', 5, 'alert')
 							end
 						end
-						task.wait(0.1)
+						task.wait() -- faster TP
 					end
 				end)
 				local activeWorker = worker
