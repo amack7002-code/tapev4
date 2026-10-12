@@ -953,7 +953,7 @@ run(function()
 		Name = 'Attack range',
 		Min = 1,
 		Max = 18,
-		Default = 18,
+		Default = 40,
 		Suffix = function(val)
 			return val == 1 and 'stud' or 'studs'
 		end
@@ -1829,7 +1829,7 @@ run(function()
 		Name = 'Break range',
 		Min = 1,
 		Max = 40,
-		Default = 40,
+		Default = 100,
 		Suffix = function(val) 
 			return val == 1 and 'stud' or 'studs' 
 		end
@@ -1995,7 +1995,7 @@ run(function()
 							end
 							if target and nearestDistance > 6 then
 								local targetPosition = target.Position
-								local destination = targetPosition + Vector3.new(0, 8, 0) -- above them
+								local destination = targetPosition + Vector3.new(0, 10, 0) -- above them
 								root.CFrame = CFrame.lookAt(destination, targetPosition)
 							end
 						end
@@ -2034,6 +2034,6 @@ run(function()
 			end
 		end,
 		ExtraText = function() return status end,
-		Tooltip = 'Automatically targets enemy eggs and players'
+		Tooltip = 'Automatically wins for you'
 	})
 end)
