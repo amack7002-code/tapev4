@@ -39,32 +39,73 @@ if not isfile('aerov4/profiles/commit.txt') then
 	writefile('aerov4/profiles/commit.txt', 'main')
 end
 
+local function getPremadeProfileId()
+	return game.PlaceId == 6872265039 and game.PlaceId or game.GameId
+end
+
+local function hasPremadeProfiles(profileId)
+	local folder = 'aerov4/profiles/premade'
+	if not isfolder(folder) then return false end
+
+	local suffix = tostring(profileId)
+	for _, file in listfiles(folder) do
+		local name = file:gsub('\\', '/'):match('([^/]+)$')
+		local stem = name and name:match('^(.*)%.txt$')
+		if stem and #stem > #suffix and stem:sub(-#suffix) == suffix then
+			return true
+		end
+	end
+	return false
+end
+
 local function downloadPremadeProfiles(commit)
 	local httpService = game:GetService('HttpService')
-	if isfolder('aerov4/profiles/premade') then
-		for _, file in listfiles('aerov4/profiles/premade') do
-			pcall(function() if isfile(file) then delfile(file) end end)
-		end
-	else
-		makefolder('aerov4/profiles/premade')
+	local folder = 'aerov4/profiles/premade'
+	if not isfolder(folder) then
+		makefolder(folder)
 	end
+
 	local success, response = pcall(function()
 		return game:HttpGet('https://api.github.com/repos/amack7002-code/tapev4/contents/profiles/premade?ref=' .. commit)
 	end)
-	if success and response then
-		local ok, files = pcall(function() return httpService:JSONDecode(response) end)
-		if ok and type(files) == 'table' then
-			for _, file in pairs(files) do
-				if file.name and file.name:find('.txt') and file.name ~= 'commit.txt' then
-					local baseName = (file.name:match('^(.-)%.txt$') or file.name):gsub('%d+$', '')
-					local fileId = (game.GameId == 2619619496) and game.GameId or game.PlaceId
-					local filePath = 'aerov4/profiles/premade/' .. baseName .. tostring(fileId) .. '.txt'
-					local ds, dc = pcall(function() return game:HttpGet(file.download_url, true) end)
-					if ds and dc and dc ~= '404: Not Found' then writefile(filePath, dc) end
+	if not success or type(response) ~= 'string' then
+		return false, tostring(response)
+	end
+
+	local ok, files = pcall(function() return httpService:JSONDecode(response) end)
+	if not ok or type(files) ~= 'table' then
+		return false, 'GitHub returned an invalid premade profile listing'
+	end
+
+	local profileId = tostring(getPremadeProfileId())
+	local downloaded = 0
+	local failed = 0
+	for _, file in pairs(files) do
+		if type(file) == 'table' and type(file.name) == 'string' and file.name:match('%.txt$') and type(file.download_url) == 'string' then
+			local baseName = (file.name:match('^(.-)%.txt$') or file.name):gsub('%d+$', '')
+			if baseName ~= '' then
+				local filePath = folder .. '/' .. baseName .. profileId .. '.txt'
+				local ds, contents = pcall(function() return game:HttpGet(file.download_url, true) end)
+				if ds and type(contents) == 'string' and contents ~= '' and contents ~= '404: Not Found' then
+					local wrote, writeErr = pcall(writefile, filePath, contents)
+					if wrote then
+						downloaded += 1
+					else
+						failed += 1
+						warn('[aerov4] failed to save premade profile ' .. filePath .. ': ' .. tostring(writeErr))
+					end
+				else
+					failed += 1
+					warn('[aerov4] failed to fetch premade profile ' .. file.name .. ': ' .. tostring(contents))
 				end
 			end
 		end
 	end
+
+	if downloaded == 0 or failed > 0 then
+		return false, string.format('downloaded %d profiles; %d failed', downloaded, failed)
+	end
+	return true, downloaded
 end
 
 if not shared.VapeDeveloper then
@@ -101,29 +142,29 @@ if not shared.VapeDeveloper then
 		wipeFolder('aerov4/guis')
 		pcall(function() if isfile('aerov4/guis/new.lua') then delfile('aerov4/guis/new.lua') end end)
 		wipeFolder('aerov4/libraries')
-		if isfolder('aerov4/profiles/premade') then
-			for _, file in listfiles('aerov4/profiles/premade') do
-				pcall(function() if isfile(file) then delfile(file) end end)
-			end
-		end
 	end
 	local oldCommit = isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt') or ''
 	writefile('aerov4/profiles/commit.txt', commit)
-	local needPremade = (oldCommit ~= commit)
-	if not needPremade then
-		needPremade = true
-		if isfolder('aerov4/profiles/premade') then
-			for _ in listfiles('aerov4/profiles/premade') do
-				needPremade = false
-				break
-			end
+	local profileId = tostring(getPremadeProfileId())
+	local profileMarker = 'aerov4/profiles/premade_' .. profileId .. '.commit'
+	local premadesAreCurrent = isfile(profileMarker) and readfile(profileMarker) == commit and hasPremadeProfiles(profileId)
+	if not premadesAreCurrent then
+		local ok, downloaded, countOrErr = pcall(downloadPremadeProfiles, commit)
+		if ok and downloaded then
+			pcall(writefile, profileMarker, commit)
+		else
+			local reason = ok and countOrErr or downloaded
+			warn('[aerov4] failed to download premade profiles: ' .. tostring(reason))
 		end
-	end
-	if needPremade then
-		pcall(downloadPremadeProfiles, commit)
 	end
 end
 
-return loadstring(downloadFile('aerov4/main.lua'), 'main')({
+local mainSource = downloadFile('aerov4/main.lua')
+local mainChunk, mainErr = loadstring(mainSource, 'main')
+if not mainChunk then
+	error('[aerov4] failed to compile main.lua: ' .. tostring(mainErr))
+end
+
+return mainChunk({
 	Closet = _args.Closet,
 })
