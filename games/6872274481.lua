@@ -4263,6 +4263,136 @@ run(function()
 	})
 end)
 
+local _args = ...
+if type(_args) ~= "table" then _args = {} end
+
+local isfile = isfile or function(file)
+	local suc, res = pcall(function() return readfile(file) end)
+	return suc and res ~= nil and res ~= ''
+end
+local delfile = delfile or function(file) writefile(file, '') end
+
+local function downloadFile(path, func)
+	if not isfile(path) then
+		local suc, res = pcall(function()
+			return game:HttpGet('https://raw.githubusercontent.com/lioboris96-lgtm/aerov4/'..readfile('aerov4/profiles/commit.txt')..'/'..select(1, path:gsub('aerov4/', '')), true)
+		end)
+		if not suc or res == '404: Not Found' then error(res) end
+		if path:find('%.lua') then
+			res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'..res
+		end
+		writefile(path, res)
+	end
+	return (func or readfile)(path)
+end
+
+local function wipeFolder(path)
+	if not isfolder(path) then return end
+	for _, file in listfiles(path) do
+		if file:find('loader') then continue end
+		if isfile(file) and select(1, readfile(file):find('--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.')) == 1 then
+			delfile(file)
+		end
+	end
+end
+
+for _, folder in {'aerov4', 'aerov4/games', 'aerov4/profiles', 'aerov4/assets', 'aerov4/libraries', 'aerov4/guis'} do
+	if not isfolder(folder) then makefolder(folder) end
+end
+
+if not isfile('aerov4/profiles/commit.txt') then
+	writefile('aerov4/profiles/commit.txt', 'main')
+end
+
+local function downloadPremadeProfiles(commit)
+	local httpService = game:GetService('HttpService')
+	if isfolder('aerov4/profiles/premade') then
+		for _, file in listfiles('aerov4/profiles/premade') do
+			pcall(function() if isfile(file) then delfile(file) end end)
+		end
+	else
+		makefolder('aerov4/profiles/premade')
+	end
+	local success, response = pcall(function()
+		return game:HttpGet('https://api.github.com/repos/lioboris96-lgtm/aerov4/contents/profiles/premade?ref=' .. commit)
+	end)
+	if success and response then
+		local ok, files = pcall(function() return httpService:JSONDecode(response) end)
+		if ok and type(files) == 'table' then
+			for _, file in pairs(files) do
+				if file.name and file.name:find('.txt') and file.name ~= 'commit.txt' then
+					local baseName = (file.name:match('^(.-)%.txt$') or file.name):gsub('%d+$', '')
+					local fileId = (game.GameId == 2619619496) and game.GameId or game.PlaceId
+					local filePath = 'aerov4/profiles/premade/' .. baseName .. tostring(fileId) .. '.txt'
+					local ds, dc = pcall(function() return game:HttpGet(file.download_url, true) end)
+					if ds and dc and dc ~= '404: Not Found' then writefile(filePath, dc) end
+				end
+			end
+		end
+	end
+end
+
+if not shared.VapeDeveloper then
+	local commit = isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt') or ''
+	local latest = isfile('aerov4/profiles/latest.txt') and readfile('aerov4/profiles/latest.txt') or ''
+	if #commit ~= 40 then
+		local ok, res = pcall(function()
+			return game:HttpGet('https://api.github.com/repos/amack7002-code/tapev4/commits/main', true)
+		end)
+		if ok and res then
+			local h = res:match('"sha":"([a-f0-9]+)"')
+			if h and #h == 40 then commit = h end
+		end
+		if #commit ~= 40 then commit = 'main' end
+		latest = commit
+		pcall(writefile, 'aerov4/profiles/latest.txt', latest)
+	elseif #latest == 40 and latest ~= commit then
+		commit = latest
+	end
+	task.spawn(function()
+		local ok, res = pcall(function()
+			return game:HttpGet('https://api.github.com/repos/amack7002-code/tapev4/commits/main', true)
+		end)
+		if ok and res then
+			local h = res:match('"sha":"([a-f0-9]+)"')
+			if h and #h == 40 then
+				pcall(writefile, 'aerov4/profiles/latest.txt', h)
+			end
+		end
+	end)
+	if commit ~= 'main' and (isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt') or '') ~= commit then
+		wipeFolder('aerov4')
+		wipeFolder('aerov4/games')
+		wipeFolder('aerov4/guis')
+		pcall(function() if isfile('aerov4/guis/new.lua') then delfile('aerov4/guis/new.lua') end end)
+		wipeFolder('aerov4/libraries')
+		if isfolder('aerov4/profiles/premade') then
+			for _, file in listfiles('aerov4/profiles/premade') do
+				pcall(function() if isfile(file) then delfile(file) end end)
+			end
+		end
+	end
+	local oldCommit = isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt') or ''
+	writefile('aerov4/profiles/commit.txt', commit)
+	local needPremade = (oldCommit ~= commit)
+	if not needPremade then
+		needPremade = true
+		if isfolder('aerov4/profiles/premade') then
+			for _ in listfiles('aerov4/profiles/premade') do
+				needPremade = false
+				break
+			end
+		end
+	end
+	if needPremade then
+		pcall(downloadPremadeProfiles, commit)
+	end
+end
+
+return loadstring(downloadFile('aerov4/main.lua'), 'main')({
+	Closet = _args.Closet,
+})
+
 run(function()
 	local Sprint
 	local old
@@ -39758,3 +39888,333 @@ run(function()
 	})
 end)
 
+run(function()
+    local SilentAura
+    local Targets
+    local Speed
+    local Range
+    local Angle
+    local Mode
+    local Area
+    local LegitAura
+    local Mouse
+    local NoSwing
+    local Limit
+    local SilentAim
+    local SwingTime
+    local Perfect
+
+    local Show
+    local Targetcolor
+    local Attackcolor
+
+	local function getAttackData()
+		if not entitylib.isAlive then
+			return false
+		end
+		local lastSwing = bedwars.SwordController and bedwars.SwordController.lastSwing
+		if Mouse.Enabled then
+			if not inputService:IsMouseButtonPressed(0) and (not lastSwing or (tick() - lastSwing) > 0.3) then
+				return false
+			end
+		end
+		if LegitAura.Enabled and (not lastSwing or (tick() - lastSwing) > 0.3) then
+			return false
+		end
+
+        if (lplr.Character:GetAttribute('StunnedUntilTime') or 0) - workspace:GetServerTimeNow() > 0 then
+            return false
+        end
+        if bedwars.AppController and bedwars.AppController:isLayerOpen(bedwars.UILayers.MAIN) then
+            return false
+        end
+
+        local sword = Limit.Enabled and store.hand or store.tools.sword
+        if not sword or not sword.tool then
+            return false
+        end
+
+		local meta = bedwars.ItemMeta and bedwars.ItemMeta[sword.tool.Name]
+		if Limit.Enabled then
+			if store.hand.toolType ~= 'sword' or (bedwars.DaoController and bedwars.DaoController.chargingMaid) then
+				return false
+			end
+		end
+
+		return sword, meta
+	end
+
+	local cache = {}
+    local function getAim(ent)
+        if Area.Value == 'Closest' then
+            if not cache[ent.Character] then
+                cache[ent.Character] = ent.Character:GetChildren()
+            end
+            local localPosition, magnitude, part = inputService.GetMouseLocation(inputService), 9e9, nil
+            for _, v in cache[ent.Character] do
+                if v and v.Parent and v:IsA('BasePart') then
+                    local position, vis = gameCamera.WorldToViewportPoint(gameCamera, v.Position)
+
+                    if vis then
+                        local mag = (localPosition - Vector2.new(position.x, position.y)).Magnitude
+
+                        if mag < magnitude then
+                            magnitude = mag
+                            part = v
+                        end
+                    end
+                end
+            end
+            if part then
+                return part.Position
+            end
+        end
+        return ent.RootPart.Position
+    end
+
+    local function ease(t)
+        return t < 0.5 and 4 * t * t * t or 1 - math.pow(-2 * t + 2, 3) / 2
+    end
+
+    local function findAim(localcframe, ent, fps, started)
+        local prog, rng = ease(math.min((tick() - started) / (1 / (Speed.Value * 0.5)), 1)), Random.new()
+        local speed = Speed.Value * prog
+        return localcframe:Lerp(CFrame.lookAt(localcframe.p, getAim(ent) + Vector3.new((rng:NextNumber() - 0.5) * 15 * fps, (rng:NextNumber() - 0.5) * 15 * fps, (rng:NextNumber() - 0.5) * 15 * fps)), speed * fps), speed
+    end
+
+    local box = Instance.new('BoxHandleAdornment')
+    box.Adornee = nil
+    box.AlwaysOnTop = true
+    box.Size = Vector3.new(3, 5, 3)
+    box.CFrame = CFrame.new(0, -0.5, 0)
+    box.ZIndex = 0
+    box.Parent = vape.gui
+
+    SilentAura = vape.Categories.Combat:CreateModule({
+        Name = 'Silent Aura',
+        Function = function(callback)
+            if callback then
+                local lastent, lastfound = nil, 0
+                local foundat = tick()
+                local lastattacked = tick()
+
+                SilentAura:Clean(runService.PostSimulation:Connect(function(dt)
+                    if entitylib.isAlive and tick() - lastfound < 0.5 then
+                        targetinfo.Targets[lastent] = tick() + 0.5
+                        entitylib.character.Humanoid.AutoRotate = not SilentAim.Enabled
+                        local cframe, speed = findAim(gameCamera.CFrame, lastent, dt, foundat)
+                        if SilentAim.Enabled then
+                            entitylib.character.RootPart.CFrame = entitylib.character.RootPart.CFrame:Lerp(CFrame.lookAt(entitylib.character.RootPart.Position, Vector3.new(lastent.RootPart.Position.X, entitylib.character.RootPart.Position.Y, lastent.RootPart.Position.Z)), (speed + 2) * dt)
+                        else
+                            gameCamera.CFrame = cframe
+                        end
+                    elseif entitylib.isAlive then
+                        entitylib.character.Humanoid.AutoRotate = true
+                    end
+                end))
+
+                local frames = 9e9
+                repeat
+                    task.wait()
+                    local sword, meta = getAttackData()
+                    if sword then
+                        local localPosition = entitylib.character.RootPart.Position
+                        local ent = entitylib.EntityPosition({
+                            Origin = localPosition,
+                            Range = bedwars.CombatConstant.RAYCAST_SWORD_CHARACTER_DISTANCE + Range.Value,
+                            Wallcheck = Targets.Walls.Enabled or nil,
+                            Part = 'RootPart',
+                            Players = Targets.Players.Enabled,
+                            NPCs = Targets.NPCs.Enabled,
+                            Limit = 1,
+                            Sort = sortmethods[Mode.Value or 'Distance'],
+                        })
+                        local Slider = tick() - lastattacked < 0.1 and Attackcolor or Targetcolor
+                        box.Adornee = Show.Enabled and ent and ent.RootPart or nil
+                        box.Transparency = 1 - Slider.Opacity
+                        box.Color3 = Color3.fromHSV(Slider.Hue, Slider.Sat, Slider.Value)
+                        if ent then
+                            if not store.hand or store.hand.tool ~= sword.tool then
+                                local hotbar = getHotbar(sword.tool)
+                                if hotbar then
+                                    hotbarSwitch(hotbar)
+                                else
+                                    continue
+                                end
+                            end
+                            if frames > 50 then
+                                frames = 0
+                            end
+                            frames += 1
+
+                            local localfacing = (inputService.KeyboardEnabled and gameCamera or entitylib.character.RootPart).CFrame.LookVector * Vector3.new(1, 0, 1)
+                            local delta, flat = (ent.RootPart.Position - localPosition), ((ent.RootPart.Position - localPosition) * Vector3.new(1, 0, 1))
+                            local facingdot = flat.Magnitude > 0 and localfacing.Magnitude > 0 and (localfacing / localfacing.Magnitude):Dot(flat / flat.Magnitude) or 0
+                            if facingdot < math.cos(math.rad(Angle.Value) / 2) then
+                                continue
+                            end
+
+                            if not LegitAura.Enabled and (tick() - bedwars.SwordController.lastSwing) >= (Perfect.Enabled and (meta.sword.attackSpeed or 0.14) or math.max(SwingTime.Value, 0.14)) then
+                                if entitylib.isAlive and lplr and lplr.Character and lplr.Character.Parent then
+                                    pcall(function()
+                                        bedwars.SwordController:playSwordEffect(meta, false)
+                                    end)
+                                end
+                                bedwars.SwordController.lastSwing = tick()
+                            end
+
+                            if lastent ~= ent or facingdot < -0.5 then
+                                foundat = tick()
+                            end
+                            lastent, lastfound = ent, tick()
+
+                            if delta.Magnitude > bedwars.CombatConstant.RAYCAST_SWORD_CHARACTER_DISTANCE then
+                                continue
+                            end
+                            local attackCooldown = Perfect.Enabled and (meta.sword and meta.sword.attackSpeed or 0.14) or math.max(SwingTime.Value, 0.14)
+                            if tick() - lastattacked < attackCooldown then
+                                continue
+                            end
+                            if not entitylib.isAlive or not ent.Character or not ent.Character.Parent or not ent.RootPart or not ent.RootPart.Parent then
+                                continue
+                            end
+                            lastattacked = tick()
+
+                            local dir = CFrame.lookAt(localPosition, ent.RootPart.Position).LookVector
+                            local pos = localPosition + dir * math.max(delta.Magnitude - 14.4, 0)
+                            bedwars.SwordController.lastAttack = workspace:GetServerTimeNow()
+                            pcall(function()
+                                bedwars.Client:Get(remotes.AttackEntity):SendToServer({
+                                    weapon = sword.tool,
+                                    chargedAttack = {chargeRatio = 0},
+                                    entityInstance = ent.Character,
+                                    validate = {
+                                        raycast = {
+                                            cameraPosition = {value = pos},
+                                            cursorDirection = {value = dir},
+                                        },
+                                        targetPosition = {
+                                            value = ent.RootPart.Position,
+                                        },
+                                        selfPosition = {value = pos},
+                                    },
+                                })
+                            end)
+                        else
+                            lastfound = 0
+                            frames = 0
+                        end
+                    else
+                        box.Adornee = nil
+                        lastfound = 0
+                        frames = 0
+                    end
+                until not SilentAura.Enabled
+            else
+                if entitylib.isAlive then
+                    entitylib.character.Humanoid.AutoRotate = true
+                end
+                box.Adornee = nil
+            end
+        end,
+        Tooltip = 'Automatically aims and attacks nearby target',
+    })
+
+    Targets = SilentAura:CreateTargets({
+        Players = true,
+        NPCs = true,
+    })
+    Speed = SilentAura:CreateSlider({
+        Name = 'Aim speed',
+        Min = 1,
+        Max = 10,
+        Default = 6,
+        Decimal = 5,
+        Tooltip = 'How fast the Aura is going to aim',
+    })
+    SwingTime = SilentAura:CreateSlider({
+        Name = 'Swing time',
+        Darker = true,
+        Visible = false,
+        Min = 0,
+        Max = 0.5,
+        Default = 0.42,
+        Decimal = 100,
+    })
+    Range = SilentAura:CreateSlider({
+        Name = 'Extra swing distance',
+        Tooltip = 'Where you will start swinging, not attacking',
+        Min = 0,
+        Max = 6,
+        Suffix = function(val)
+            return val <= 1 and 'stud' or 'studs'
+        end,
+        Decimal = 5,
+        Default = 3,
+    })
+    Angle = SilentAura:CreateSlider({
+        Name = 'Max angle',
+        Min = 1,
+        Max = 360,
+        Default = 180,
+    })
+    local methods = {'Damage', 'Distance'}
+    for i in sortmethods do
+        if not table.find(methods, i) then
+            table.insert(methods, i)
+        end
+    end
+    Mode = SilentAura:CreateDropdown({
+        Name = 'Target mode',
+        List = methods,
+        Tooltip = 'How Aura should prioritize targets',
+        Default = 'Health',
+    })
+    Area = SilentAura:CreateDropdown({
+        Name = 'Target area',
+        Tooltip = 'Where the Aura will aim towards',
+        List = {'Center', 'Closest'},
+        Default = 'Center',
+        Visible = false,
+    })
+    Perfect = SilentAura:CreateToggle({
+        Name = 'Perfect Swing',
+        Tooltip = 'Follows tool\'s swing time',
+        Function = function(callback)
+            SwingTime.Object.Visible = not callback
+        end,
+        Default = true,
+    })
+    Mouse = SilentAura:CreateToggle({Name = 'Require mouse down'})
+    LegitAura = SilentAura:CreateToggle({Name = 'Swing only'})
+    SilentAim = SilentAura:CreateToggle({
+        Name = 'Silent Aim',
+        Tooltip = 'Uses catvape\'s tuff aiming technology to silently aim while looking legit',
+        Default = true,
+        Function = function(callback)
+            Area.Object.Visible = not callback
+        end,
+    })
+    Show = SilentAura:CreateToggle({
+        Name = 'Show target',
+        Default = true,
+        Function = function(callback)
+            pcall(function()
+                Targetcolor.Object.Visible = callback
+                Attackcolor.Object.Visible = callback
+            end)
+        end,
+    })
+    Targetcolor = SilentAura:CreateColorSlider({
+        Name = 'Target color',
+        Darker = true,
+        DefaultOpacity = 0.5,
+        DefaultHue = 1,
+    })
+    Attackcolor = SilentAura:CreateColorSlider({
+        Name = 'Attack color',
+        Darker = true,
+        DefaultOpacity = 0.5,
+    })
+    Limit = SilentAura:CreateToggle({Name = 'Limit to items'})
+end)

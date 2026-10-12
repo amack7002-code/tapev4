@@ -45,6 +45,8 @@ local store = {
 }
 local ViewmodelTool
 local ViewmodelMotor
+local SkipBelowY
+local SkipAtZ
 
 local function collection(tags, module, customadd, customremove)
 	tags = typeof(tags) ~= 'table' and {tags} or tags
@@ -790,7 +792,12 @@ run(function()
 							store.noShoot = tick() + 1
 	
 							for i, v in plrs do
-								local delta = (v.RootPart.Position - entitylib.character.RootPart.Position)
+								local targetPosition = v.RootPart.Position
+								if targetPosition.Y <= SkipBelowY.Value then continue end
+								if v.Player and (v.Player:GetAttribute('InVoid') or v.Player:GetAttribute('PlayerConnected') == false) then continue end
+								if targetPosition.Z >= SkipAtZ.Value then continue end
+								local delta = (targetPosition - entitylib.character.RootPart.Position)
+								if delta.X == 0 and delta.Z == 0 then continue end
 								local angle = math.acos(math.clamp(localfacing:Dot((delta * Vector3.new(1, 0, 1)).Unit), -1, 1))
 								if angle > (math.rad(AngleCheck.Value) / 2) then continue end
 								table.insert(attacked, v)
@@ -874,6 +881,20 @@ run(function()
 		Default = 10
 	})
 	Mouse = Killaura:CreateToggle({Name = 'Require mouse down'})
+	SkipBelowY = Killaura:CreateSlider({
+		Name = 'Skip targets below Y',
+		Min = -1000,
+		Max = 1000,
+		Default = math.clamp(math.max(workspace.FallenPartsDestroyHeight + 12, 0), -1000, 1000),
+		Suffix = ' studs'
+	})
+	SkipAtZ = Killaura:CreateSlider({
+		Name = 'Skip targets at/after Z',
+		Min = -10000,
+		Max = 10000,
+		Default = 10000,
+		Suffix = ' studs'
+	})
 	Swing = Killaura:CreateToggle({Name = 'No Swing'})
 	Killaura:CreateToggle({
 		Name = 'Show target',
@@ -1767,7 +1788,7 @@ run(function()
 		end))
 	end
 	
-	Viewmodel = vape.Legit:CreateModule({
+	Viewmodel = vape.Categories.Legit:CreateModule({
 		Name = 'Viewmodel',
 		Function = function(callback)
 			if callback then 
@@ -1803,7 +1824,12 @@ run(function()
 	local AutoWin
 	local previousStates
 
-	AutoWin = vape.Categories.Minigames:CreateModule({
+	local Minigames = vape.Categories and vape.Categories.Minigames
+	if not Minigames or not Minigames.CreateModule then
+		return
+	end
+
+	AutoWin = Minigames:CreateModule({
 		Name = 'AutoWin',
 		Function = function(callback)
 			if callback then
@@ -1845,6 +1871,10 @@ run(function()
 							local health = egg:GetAttribute('Health')
 							local eggRoot = egg:IsA('Model') and (egg.PrimaryPart or egg:FindFirstChildWhichIsA('BasePart')) or egg
 							if eggRoot and typeof(health) == 'number' and health > 0 and health < lowestHealth then
+								local eggPosition = eggRoot.Position
+								if eggPosition.Y <= SkipBelowY.Value or eggPosition.Z >= SkipAtZ.Value then
+									continue
+								end
 								lowestHealth = health
 								targetEgg = eggRoot
 							end
@@ -1852,26 +1882,30 @@ run(function()
 
 						if targetEgg then
 							local targetPosition = targetEgg.Position
-						if (root.Position - targetPosition).Magnitude > 6 then
-							local destination = targetPosition - root.CFrame.LookVector * 4
-							root.CFrame = CFrame.lookAt(destination, targetPosition)
-						end
-					else
-						local target
-						local nearestDistance = math.huge
-						for _, entity in entitylib.List do
-							if entity.Player and entity.Targetable and entity.Health > 0 and entity.RootPart then
-								local distance = (root.Position - entity.RootPart.Position).Magnitude
-								if distance < nearestDistance then
-									nearestDistance = distance
-									target = entity.RootPart
+							if (root.Position - targetPosition).Magnitude > 6 then
+								local destination = targetPosition - root.CFrame.LookVector * 4
+								root.CFrame = CFrame.lookAt(destination, targetPosition)
+							end
+						else
+							local target
+							local nearestDistance = math.huge
+							for _, entity in entitylib.List do
+								if entity.Player and entity.Targetable and entity.Health > 0 and entity.RootPart then
+									local targetPosition = entity.RootPart.Position
+									if targetPosition.Y <= SkipBelowY.Value or targetPosition.Z >= SkipAtZ.Value then continue end
+									if entity.Player:GetAttribute('InVoid') or entity.Player:GetAttribute('PlayerConnected') == false then continue end
+									local distance = (root.Position - targetPosition).Magnitude
+									if distance < nearestDistance then
+										nearestDistance = distance
+										target = entity.RootPart
+									end
 								end
 							end
-						end
-						if target and nearestDistance > 6 then
-							local targetPosition = target.Position
-							local destination = targetPosition - root.CFrame.LookVector * 4
-							root.CFrame = CFrame.lookAt(destination, targetPosition)
+							if target and nearestDistance > 6 then
+								local targetPosition = target.Position
+								local destination = targetPosition - root.CFrame.LookVector * 4
+								root.CFrame = CFrame.lookAt(destination, targetPosition)
+							end
 						end
 					end
 
