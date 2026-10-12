@@ -171,5 +171,9 @@
   "Kits/AutoZarrah.lua",
   "Minigames/AutoCyber.lua",
   "Minigames/AutoSheepHerder.lua",
-  "Combat/SilentAura.lua"
+  "Combat/SilentAura.lua",
+  "Blatant/infFly.lua",
+  "Combat/hitRegAdjust.lua",
+  "Render/chatPos.lua",
+  "World/acModView.lua"
 ]

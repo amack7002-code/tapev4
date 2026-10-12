@@ -40209,3 +40209,709 @@ run(function()
     })
     Limit = SilentAura:CreateToggle({Name = 'Limit to items'})
 end)
+
+run(function()
+	local v2 = httpService
+	local v3 = playersService
+	local v4 = replicatedStorage
+	local v5 = runService
+	local v6 = inputService
+	local v7 = tweenService
+	local v8 = collectionService
+	local v9 = guiService
+	local v10 = game:GetService('TeleportService')
+	local obj = debug
+	local currentCamera = gameCamera
+	local localPlayer = lplr
+	local entity = entitylib
+	local getfontbounds = getfontsize
+	local getvapeasset = getcustomasset
+	if AetherMatchRuntime and AetherMatchRuntime.Movement and aetherPortAddMovementOwner then
+		aetherPortAddMovementOwner('InfiniteFly')
+	end
+	local function queryBaseParts(model)
+		local ok, list = pcall(function()
+			return model:QueryDescendants("BasePart")
+		end)
+		if ok and type(list) == "table" then return list end
+		local out = {}
+		for _, part in model:GetDescendants() do
+			if part:IsA("BasePart") then table.insert(out, part) end
+		end
+		return out
+	end
+
+		local v12 = nil
+		local v13 = nil
+		local textLabel = nil
+		local clone = nil
+		local n = 0
+		local n2 = 0
+		local flag = false
+		local part = Instance.new("Part")
+		part.Parent = workspace
+		part.Transparency = 1
+		part.CanQuery = false
+		part.CanTouch = false
+		part.CanCollide = false
+		part.Anchored = true
+		vape:Clean(part)
+		local obj2 = setmetatable({}, { __mode = "k" })
+
+		local function fn5()
+			for _, v14 in {
+				entity.character.Humanoid.MoveDirection,
+				Vector3.new(1, 0, 0),
+				Vector3.new(0, 0, 1),
+				Vector3.new(-1, 0, 0),
+				Vector3.new(0, 0, -1),
+			}, nil, nil do
+				for i = 1, 4 do
+					local v15 = workspace:Blockcast(entity.character.RootPart.CFrame + Vector3.new(0, 200, 0) + v14 * i, Vector3.new(3, 3, 3), Vector3.new(0, -1000, 0), store.airRay)
+					if v15 then
+						return v15
+					end
+				end
+			end
+
+			return false
+		end
+
+		v12 = vape.Categories.Blatant:CreateModule({
+			Name = "InfiniteFly",
+			Function = function(visible)
+				if textLabel and clone then
+					textLabel.Visible = visible
+					clone.Visible = visible
+				end
+
+				if visible then
+					if not entity.isAlive or flag or workspace:Raycast(entity.character.RootPart.Position, Vector3.new(0, -1000, 0), store.airRay) then
+						notif("InfiniteFly", "Cannot fly at this state.", 8, "warning")
+						v12:Toggle()
+						return
+					end
+
+					if entity.isAlive then
+						currentCamera.CameraSubject = part
+
+						for _, v14 in queryBaseParts(entity.character.Character) do
+							obj2[v14] = v14.Transparency
+							v14.Transparency = 1
+						end
+					end
+
+					part.CFrame = entity.character.Character.Head.CFrame
+					store.infinitefly = true
+					vape.MovementOwner = "InfiniteFly"
+					flag = true
+					local rootPart = entity.character.RootPart
+					local cframe = CFrame.new(rootPart.Position)
+					rootPart.CFrame = cframe
+
+					v12:Clean(v6.InputBegan:Connect(function(input)
+						if not v6:GetFocusedTextBox() then
+							if input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.ButtonA then
+								n = 1
+							elseif input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.ButtonL2 then
+								n2 = -1
+							end
+						end
+					end))
+
+					v12:Clean(v6.InputEnded:Connect(function(input)
+						if input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.ButtonA then
+							n = 0
+						elseif input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.ButtonL2 then
+							n2 = 0
+						end
+					end))
+
+					v12:Clean(v5.PreSimulation:Connect(function(deltaTime)
+						if not entity.isAlive or not rootPart or not isnetworkowner(rootPart) then
+							notif("InfiniteFly", "Network ownership disowned", 10, "alert")
+							v12:Toggle()
+							return
+						end
+
+						if workspace:Raycast(rootPart.Position, Vector3.new(0, -1000, 0), store.airRay) then
+							notif("InfiniteFly", "Landing", 3.5, "alert")
+							v12:Toggle()
+							return
+						end
+
+						local cframe2 = CFrame.new(Vector3.new(rootPart.Position.X, part.CFrame.Y, rootPart.Position.Z))
+						part.CFrame = cframe2 + Vector3.new(0, deltaTime * (n + n2) * v13.Value, 0)
+
+						if textLabel and clone then
+							textLabel.Text = ("%* blocks"):format(math.round((cframe.Position - cframe2.Position).Magnitude / 3))
+							clone.Text = textLabel.Text
+						end
+
+						if rootPart.CFrame.Y <= part.CFrame.Y + 4 or fn5() then
+							local lookVector = rootPart.CFrame.LookVector
+							rootPart.CFrame = CFrame.lookAlong(Vector3.new(rootPart.CFrame.X, part.CFrame.Y + 4 + 125, rootPart.CFrame.Z), lookVector)
+						end
+					end))
+				elseif store.infinitefly then
+					store.infinitefly = false
+					-- drop the fall speed before landing
+					local hold = v5.PreSimulation:Connect(function()
+						if entity.isAlive then
+							local velocity = entity.character.RootPart.AssemblyLinearVelocity
+							entity.character.RootPart.AssemblyLinearVelocity = Vector3.new(velocity.X, 0, velocity.Z)
+						end
+					end)
+					task.wait(0.3)
+					local isAlive = entity.isAlive and fn5()
+
+					if isAlive then
+						entity.character.RootPart.CFrame = CFrame.new(isAlive.Position + Vector3.new(0, 3.5, 0))
+					end
+					hold:Disconnect()
+
+					notif("InfiniteFly", "Landed", 2.5, "info")
+					flag = false
+
+					if entity.isAlive then
+						for _, v14 in queryBaseParts(entity.character.Character) do
+							v14.Transparency = obj2[v14] or v14.Transparency
+						end
+
+						currentCamera.CameraSubject = entity.character.Character
+					end
+
+					if vape.MovementOwner == "InfiniteFly" then
+						vape.MovementOwner = nil
+					end
+				end
+			end,
+			Tooltip = "Makes you go zoom. Fly, InfiniteJump, HighJump, LongJump and the other movement modules except Speed stop working until it has fully landed",
+			ExtraText = function()
+				return "Heatseeker"
+			end,
+		})
+
+		v13 = v12:CreateSlider({
+			Name = "Vertical Speed",
+			Min = 1,
+			Max = 150,
+			Default = 50,
+			Suffix = function(arg)
+				return arg <= 1 and "stud" or "studs"
+			end,
+		})
+
+		v12:CreateToggle({
+			Name = "Show distance",
+			Function = function(arg)
+				if arg then
+					textLabel = Instance.new("TextLabel")
+					textLabel.Size = UDim2.fromOffset(100, 20)
+					textLabel.Position = UDim2.new(0.5, 6, 0.5, 60)
+					textLabel.BackgroundTransparency = 1
+					textLabel.AnchorPoint = Vector2.new(0.5, 0)
+					textLabel.Text = "0 blocks"
+					textLabel.ZIndex = 6
+					textLabel.TextColor3 = Color3.new(1, 1, 1)
+					textLabel.TextSize = 18
+					textLabel.RichText = true
+					textLabel.FontFace = vape.Libraries.uipallet.FontDisplay
+					textLabel.Visible = v12.Enabled
+					textLabel.Parent = vape.gui
+					clone = textLabel:Clone()
+					clone.ZIndex = 5
+					clone.AnchorPoint = Vector2.new(0.5, 0)
+					clone.Position = clone.Position + UDim2.fromOffset(1, 1)
+					clone.Text = textLabel.ContentText
+					clone.TextColor3 = Color3.new()
+					clone.Parent = vape.gui
+				else
+					if clone then
+						clone:Destroy()
+						clone = nil
+					end
+
+					if textLabel then
+						textLabel:Destroy()
+						textLabel = nil
+					end
+				end
+			end,
+			Default = true,
+		})
+	end)
+
+
+run(function()
+	local HitregAdjuster, Hitreg
+	local firstConnection, restoreConnection
+
+	HitregAdjuster = vape.Categories.Combat:CreateModule({
+		Name = 'HitregAdjuster',
+		Function = function(enabled)
+			if not enabled then return end
+			local sync = bedwars.SyncEvents and bedwars.SyncEvents.SwordSwing
+			if not sync then
+				notif('HitregAdjuster', 'Sword swing events are unavailable.', 5, 'warning')
+				HitregAdjuster:Toggle()
+				return
+			end
+			local original
+			firstConnection = sync:setPriority(150):connect(function(event)
+				original = event.attackSpeed
+				event.attackSpeed = 10 / math.max(Hitreg:GetRandomValue() - 1, 1)
+			end)
+			restoreConnection = sync:setPriority(300):connect(function(event)
+				if original ~= nil then event.attackSpeed = original end
+			end)
+			HitregAdjuster:Clean(function()
+				if firstConnection then firstConnection:Destroy(); firstConnection = nil end
+				if restoreConnection then restoreConnection:Destroy(); restoreConnection = nil end
+			end)
+		end,
+		Tooltip = 'Adjusts manual and AutoClicker sword swing spacing without changing Killaura timing'
+	})
+	Hitreg = HitregAdjuster:CreateTwoSlider({Name = 'Hitreg', Min = 1, Max = 36, DefaultMin = 35, DefaultMax = 35, Suffix = ' hits / 10s'})
+end)
+
+
+run(function()
+    local ChatPosition
+    local Vertical
+    local Horizontal
+    local moved
+
+    -- The chat is one of two completely different systems and the old module only ever spoke to
+    -- the wrong one. SetCore('ChatWindowPosition') drives the legacy Lua chat; BedWars runs on
+    -- TextChatService, which ignores SetCore entirely - so the module did
+    -- nothing. We drive both now: SetCore for the legacy chat, and for TextChatService we find the
+    -- window it actually rendered and move that frame ourselves, re-asserting it because the chat
+    -- rebuilds its GUI on respawn and channel changes.
+    local function targetOffset()
+        return Vector2.new(Horizontal and Horizontal.Value or 0, Vertical and Vertical.Value or 200)
+    end
+
+    -- Legacy chat is the supported path. Retry because the CoreScript registers the SetCore
+    -- callback a moment after join and a single early call is silently dropped.
+    local function applyLegacy()
+        local off = targetOffset()
+        pcall(function()
+            starterGui:SetCore('ChatWindowPosition', UDim2.fromOffset(off.X, off.Y))
+        end)
+    end
+
+    -- TextChatService's window has no public position property, so move the rendered frame. Its
+
+
+    local function findChatFrame()
+        local roots = {coreGui}
+        local pg = lplr:FindFirstChild('PlayerGui')
+        if pg then table.insert(roots, pg) end
+        for _, root in roots do
+            for _, gui in root:GetChildren() do
+                if gui:IsA('ScreenGui') and gui.Name:lower():find('chat') then
+                    for _, child in gui:GetChildren() do
+                        if child:IsA('GuiObject') and child:FindFirstChildWhichIsA('ScrollingFrame', true) then
+                            return child
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    local function apply()
+        applyLegacy()
+        local frame = findChatFrame()
+        if frame then
+            moved = frame
+            pcall(function()
+                frame.Position = UDim2.fromOffset(targetOffset().X, targetOffset().Y)
+            end)
+        end
+    end
+
+    local function restore()
+        pcall(function()
+            starterGui:SetCore('ChatWindowPosition', UDim2.new())
+        end)
+        if moved and moved.Parent then
+            pcall(function() moved.Position = UDim2.new() end)
+        end
+        moved = nil
+    end
+
+    ChatPosition = vape.Categories.Render:CreateModule({
+        Name = 'ChatPosition',
+        Function = function(callback)
+            if callback then
+                ChatPosition:Clean(task.spawn(function()
+                    while ChatPosition.Enabled do
+                        apply()
+                        task.wait(1)
+                    end
+                end))
+            else
+                restore()
+            end
+        end,
+        Tooltip = 'Repositions the chat window. Works with both the legacy chat and TextChatService'
+    })
+    Vertical = ChatPosition:CreateSlider({
+        Name = 'Vertical',
+        Min = 0,
+        Max = 700,
+        Default = 200,
+        Suffix = ' px',
+        Tooltip = 'How far down from the top-left the chat window sits',
+        Function = function()
+            if ChatPosition.Enabled then apply() end
+        end
+    })
+    Horizontal = ChatPosition:CreateSlider({
+        Name = 'Horizontal',
+        Min = 0,
+        Max = 700,
+        Default = 0,
+        Suffix = ' px',
+        Tooltip = 'How far right from the left edge the chat window sits',
+        Function = function()
+            if ChatPosition.Enabled then apply() end
+        end
+    })
+end)
+
+
+run(function()
+
+
+	local KnitInit, Knit
+	local knitDeadline = tick() + 30
+	repeat
+		KnitInit, Knit = pcall(function()
+			return debug.getupvalue(require(lplr.PlayerScripts.TS.knit).setup, 9)
+		end)
+		if KnitInit and Knit then break end
+		task.wait()
+	until tick() > knitDeadline
+	if not (KnitInit and Knit) then
+		error('Knit never became available for the anticheat view module')
+	end
+
+	if not debug.getupvalue(Knit.Start, 1) then
+		local upvalueDeadline = tick() + 15
+		repeat task.wait() until debug.getupvalue(Knit.Start, 1) or tick() > upvalueDeadline
+		if not debug.getupvalue(Knit.Start, 1) then
+			error('debug.getupvalue is unavailable, so the anticheat view module cannot start')
+		end
+	end
+
+	local Players = game:GetService("Players")
+
+	shared.PERMISSION_CONTROLLER_HASANYPERMISSIONS_REVERT = shared.PERMISSION_CONTROLLER_HASANYPERMISSIONS_REVERT or Knit.Controllers.PermissionController.hasAnyPermissions
+	shared.MATCH_CONTROLLER_GETPLAYERPARTY_REVERT = shared.MATCH_CONTROLLER_GETPLAYERPARTY_REVERT or Knit.Controllers.MatchController.getPlayerParty
+
+	local AC_MOD_View = {
+		playerConnections = {},
+		Enabled = false,
+		Friends = {},
+		parties = {},
+		teamMap = {},
+		display = {},
+		isRefreshing = false,
+		cacheDirty = true,
+		disable_disguises = false,
+		disguises = {},
+		teamData = {}
+	}
+
+	AC_MOD_View.controller = Knit.Controllers.PermissionController
+	AC_MOD_View.match_controller = Knit.Controllers.MatchController
+
+	function AC_MOD_View:getPartyById(displayId)
+		if not displayId then return end
+		displayId = tostring(displayId)
+		if self.display[displayId] then return self.display[displayId] end
+		for _, party in pairs(self.parties) do
+			if party.displayId == tostring(displayId) then
+				self.display[displayId] = party
+				return party
+			end
+		end
+	end
+
+	function AC_MOD_View:refreshDisplayCache()
+		for _, plr in pairs(Players:GetPlayers()) do
+			local playerId = tostring(plr.UserId)
+
+			local playerPartyId = self.teamMap[playerId]
+			if playerPartyId ~= nil then
+				self:getPartyById(playerPartyId)
+			end
+			task.wait()
+		end
+	end
+
+	function AC_MOD_View:refreshDisplayCacheAsync()
+		task.spawn(self.refreshDisplayCache, self)
+	end
+
+	function AC_MOD_View:getPlayerTeamData(plr)
+		if self.teamData[plr] then return self.teamData[plr] end
+
+		self.teamData[plr] = {}
+
+		local teamMembers = {}
+		local playerTeam = plr.Team
+		if not playerTeam then
+			return teamMembers
+		end
+
+		local playerId = tostring(plr.UserId)
+		self.Friends[playerId] = self.Friends[playerId] or {}
+
+		for _, otherPlayer in pairs(Players:GetPlayers()) do
+			if otherPlayer == plr then continue end
+
+			local otherPlayerId = tostring(otherPlayer.UserId)
+			local areFriends = self.Friends[playerId][otherPlayerId]
+
+			if areFriends == nil then
+				local suc, res = pcall(function()
+					return plr:IsFriendsWith(otherPlayer.UserId)
+				end)
+				areFriends = suc and res or false
+
+				if suc then
+					self.Friends = self.Friends or {}
+					self.Friends[playerId] = self.Friends[playerId] or {}
+					self.Friends[playerId][otherPlayerId] = areFriends
+					self.Friends[otherPlayerId] = self.Friends[otherPlayerId] or {}
+					self.Friends[otherPlayerId][playerId] = areFriends
+				end
+			end
+
+			if areFriends and otherPlayer.Team == playerTeam then
+				table.insert(teamMembers, otherPlayerId)
+			end
+		end
+
+		self.teamData[plr] = teamMembers
+
+		return teamMembers
+	end
+
+	function AC_MOD_View:refreshPlayerTeamData()
+		for i,v in pairs(Players:GetPlayers()) do
+			self:getPlayerTeamData(v)
+			task.wait()
+		end
+	end
+
+	function AC_MOD_View:refreshPlayerTeamDataAsync()
+		task.spawn(self.refreshPlayerTeamData, self)
+	end
+
+	function AC_MOD_View:refreshTeamMap()
+		local allTeams = {}
+		for _, p in pairs(Players:GetPlayers()) do
+			local teamMembers = self:getPlayerTeamData(p)
+			if teamMembers and #teamMembers > 0 then
+				allTeams[p] = teamMembers
+			end
+		end
+
+		local validTeams = {}
+		for playerInTeams, members in pairs(allTeams) do
+			local playerIdInTeams = tostring(playerInTeams.UserId)
+			local cleanedMembers = {}
+
+			for _, memberId in pairs(members) do
+				local memberIdStr = tostring(memberId)
+				if memberIdStr == playerIdInTeams then
+
+				else
+					table.insert(cleanedMembers, memberIdStr)
+				end
+			end
+
+			if #cleanedMembers > 0 then
+				validTeams[playerInTeams] = cleanedMembers
+			end
+		end
+
+		self.parties = {}
+		self.teamMap = {}
+		local teamId = 0
+		for playerInTeams, members in pairs(validTeams) do
+			local playerIdInTeams = tostring(playerInTeams.UserId)
+			if not self.teamMap[playerIdInTeams] then
+				self.teamMap[playerIdInTeams] = teamId
+				table.insert(self.parties, {
+					displayId = tostring(teamId),
+					members = members
+				})
+				teamId = teamId + 1
+
+				for _, memberId in pairs(members) do
+					self.teamMap[memberId] = teamId - 1
+				end
+			end
+		end
+
+		self.cacheDirty = false
+		self.isRefreshing = false
+	end
+
+	function AC_MOD_View:refreshTeamMapAsync()
+		if self.isRefreshing then return end
+		self.isRefreshing = true
+		task.spawn(function()
+			self:refreshTeamMap()
+		end)
+	end
+
+	function AC_MOD_View:getPlayerParty(plr)
+		if not plr or not plr:IsA("Player") then
+			return nil
+		end
+
+		local playerId = tostring(plr.UserId)
+
+		if self.cacheDirty or not next(self.teamMap) then
+			self:refreshTeamMapAsync()
+		end
+
+		local playerPartyId = self.teamMap[playerId]
+		if playerPartyId ~= nil then
+			return self:getPartyById(playerPartyId)
+		end
+
+		return nil
+	end
+
+	AC_MOD_View.mockGetPlayerParty = function(self, plr)
+		local parties = self.parties
+		if parties ~= nil and #parties > 0 then
+			return shared.MATCH_CONTROLLER_GETPLAYERPARTY_REVERT(self, plr)
+		end
+		return AC_MOD_View:getPlayerParty(plr)
+	end
+
+	function AC_MOD_View:syncStreamRemover()
+		local remover = vape.Modules and vape.Modules.StreamRemover
+		if not remover then return end
+		local want = self.disable_disguises == true
+		if remover.Enabled ~= want then
+			-- Remember that this module turned StreamRemover on so disabling ACMODView
+			-- restores the previous state instead of leaving it stuck on.
+			if want then self.streamRemoverOwned = true end
+			remover:Toggle()
+		end
+	end
+
+	function AC_MOD_View:toggleDisableDisguises()
+		if not self.Enabled then return end
+		self:syncStreamRemover()
+	end
+
+	function AC_MOD_View:refreshCore()
+		self:refreshTeamMapAsync()
+		self:refreshDisplayCacheAsync()
+		self:refreshPlayerTeamDataAsync()
+
+		self:toggleDisableDisguises()
+	end
+
+	function AC_MOD_View:refreshCoreAsync()
+		task.spawn(self.refreshCore, self)
+	end
+
+	function AC_MOD_View:init()
+		self.Enabled = true
+		-- Read the toggle's real state so the saved option and the StreamRemover state
+		-- cannot disagree (the toggle defaulted on while the flag defaulted off).
+		if self.disableDisguisesToggle then
+			self.disable_disguises = self.disableDisguisesToggle.Enabled == true
+		end
+		self.controller.hasAnyPermissions = function(self)
+			return true
+		end
+		self.match_controller.getPlayerParty = self.mockGetPlayerParty
+
+		self.playerConnections = {
+			added = Players.PlayerAdded:Connect(function(player)
+				self.cacheDirty = true
+				self:refreshCoreAsync()
+				player:GetPropertyChangedSignal("Team"):Connect(function()
+					self.cacheDirty = true
+					self:refreshCoreAsync()
+				end)
+			end),
+			removed = Players.PlayerRemoving:Connect(function(player)
+				local playerId = tostring(player.UserId)
+				self.Friends[playerId] = nil
+				for _, cache in pairs(self.Friends) do
+					cache[playerId] = nil
+				end
+				self.cacheDirty = true
+				self:refreshCoreAsync()
+			end)
+		}
+
+		self:refreshCore()
+	end
+
+	function AC_MOD_View:disable()
+		self.Enabled = false
+
+		self.controller.hasAnyPermissions = shared.PERMISSION_CONTROLLER_HASANYPERMISSIONS_REVERT
+		self.match_controller.getPlayerParty = shared.MATCH_CONTROLLER_GETPLAYERPARTY_REVERT
+
+		if self.playerConnections then
+			for _, v in pairs(self.playerConnections) do
+				pcall(function() v:Disconnect() end)
+			end
+			table.clear(self.playerConnections)
+		end
+
+		self.parties = {}
+		self.teamMap = {}
+		self.Friends = {}
+		self.display = {}
+		self.teamData = {}
+		self.cacheDirty = true
+
+		if self.streamRemoverOwned then
+			local remover = vape.Modules and vape.Modules.StreamRemover
+			if remover and remover.Enabled then remover:Toggle() end
+			self.streamRemoverOwned = false
+		end
+	end
+
+	shared.ACMODVIEWENABLED = false
+	AC_MOD_View.moduleInstance = vape.Categories.World:CreateModule({
+		Name = "ACMODView",
+		Function = function(call)
+			shared.ACMODVIEWENABLED = call
+			if call then
+				AC_MOD_View:init()
+			else
+				AC_MOD_View:disable()
+			end
+		end
+	})
+
+	AC_MOD_View.disableDisguisesToggle = AC_MOD_View.moduleInstance:CreateToggle({
+		Name = "Remove Disguises",
+		Function = function(call)
+			AC_MOD_View.disable_disguises = call
+			if AC_MOD_View.Enabled then
+				AC_MOD_View:syncStreamRemover()
+			end
+		end,
+		Default = true
+	})
+	AC_MOD_View.disable_disguises = true
+end)

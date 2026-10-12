@@ -1,6 +1,6 @@
 run(function()
-	
-	
+
+
 	local KnitInit, Knit
 	local knitDeadline = tick() + 30
 	repeat
@@ -145,7 +145,7 @@ run(function()
 			for _, memberId in pairs(members) do
 				local memberIdStr = tostring(memberId)
 				if memberIdStr == playerIdInTeams then
-					
+
 				else
 					table.insert(cleanedMembers, memberIdStr)
 				end

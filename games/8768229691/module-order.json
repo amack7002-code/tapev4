@@ -17,5 +17,11 @@
   "Inventory/AutoConsume.lua",
   "Minigames/Breaker.lua",
   "Legit/Viewmodel.lua",
-  "Minigames/AutoWin.lua"
+  "Minigames/AutoWin.lua",
+  "Blatant/GodMode.lua",
+  "Blatant/PlayerAttach.lua",
+  "Blatant/infAura.lua",
+  "Minigames/autoWinV2.lua",
+  "Utility/ShopClicker.lua",
+  "Utility/gameStaller.lua"
 ]

@@ -24,8 +24,8 @@ run(function()
     end
 
     -- TextChatService's window has no public position property, so move the rendered frame. Its
-    
-    
+
+
     local function findChatFrame()
         local roots = {coreGui}
         local pg = lplr:FindFirstChild('PlayerGui')

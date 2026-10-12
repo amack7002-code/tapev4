@@ -2037,3 +2037,833 @@ run(function()
 		Tooltip = 'Automatically wins for you'
 	})
 end)
+
+run(function()
+	local GodMode
+	local Range
+	local Safe
+	local Dodge
+	local idleSince = 0
+	local dodgeUntil = 0
+
+	local function threats(origin)
+		local list = {}
+		for _, ent in entitylib.List do
+			if ent.Targetable and ent.RootPart and ent.RootPart.Parent and ent.Health > 0 and not fallen(ent) then
+				local distance = (ent.RootPart.Position - origin).Magnitude
+				if distance <= Range.Value then
+					table.insert(list, {Entity = ent, Distance = distance})
+				end
+			end
+		end
+		table.sort(list, function(a, b)
+			return a.Distance < b.Distance
+		end)
+		return list
+	end
+
+	-- over the closest enemy, raised until nobody is nearer than the safe distance
+	local function safeSpot(list)
+		local goal = attachPosition(list[1].Entity, Safe.Value)
+		for _ = 1, 4 do
+			local lift = 0
+			for _, threat in list do
+				local position = threat.Entity.RootPart.Position
+				local delta = goal - position
+				if delta.Magnitude < Safe.Value - 0.25 then
+					local flat = Vector3.new(delta.X, 0, delta.Z).Magnitude
+					local need = math.sqrt(math.max(Safe.Value ^ 2 - flat ^ 2, 0))
+					lift = math.max(lift, position.Y + need - goal.Y)
+				end
+			end
+			if lift <= 0 then break end
+			goal += Vector3.new(0, lift, 0)
+		end
+		return goal
+	end
+
+	local function release()
+		if store.godMode then
+			store.attached = nil
+		end
+		store.godMode = nil
+		mergeRoot('GodMode')
+	end
+
+	-- lifts the root out of the way of a shot that would pass close to it
+	local function projectile(shooter, kind, origin, direction, speed)
+		if not (Dodge.Enabled and entitylib.isAlive) then return end
+		if not (typeof(shooter) == 'Instance' and shooter:IsA('Player') and shooter ~= lplr) then return end
+		if not (type(kind) == 'string' and typeof(origin) == 'Vector3' and typeof(direction) == 'Vector3' and type(speed) == 'number') then return end
+		if shooter:GetAttribute('TeamId') ~= nil and shooter:GetAttribute('TeamId') == lplr:GetAttribute('TeamId') then return end
+		local meta = skywars.ItemMeta[kind]
+		local acceleration = meta and meta.Projectile and meta.Projectile.Acceleration or Vector3.new(0, skywars.Gravity, 0)
+		local velocity = direction.Unit * speed
+		local mine = realRoot().Position
+		for step = 1, 50 do
+			local t = step * 0.05
+			if (origin + velocity * t + acceleration * (t * t / 2) - mine).Magnitude < 10 then
+				dodgeUntil = math.max(dodgeUntil, tick() + t + 0.5)
+				return
+			end
+		end
+	end
+
+	GodMode = vape.Categories.Blatant:CreateModule({
+		Name = 'GodMode',
+		Function = function(callback)
+			if callback then
+				for _, id in (remotes.projectileEvents or {}) do
+					local event = skywars.Remotes[id]
+					if event then
+						GodMode:Clean(event:connect(projectile))
+					end
+				end
+				GodMode:Clean(runService.Heartbeat:Connect(function()
+					if not entitylib.isAlive or outranked('godMode') then
+						release()
+						return
+					end
+					local body = bodyRoot().Position
+					local list = threats(body)
+					local dodging = dodgeUntil > tick()
+					if #list == 0 and not dodging then
+						if store.godMode then
+							store.attached = nil
+						end
+						store.godMode = nil
+						if tick() - idleSince > 1 then
+							mergeRoot('GodMode')
+						end
+						return
+					end
+
+					if not splitRoot('GodMode') then return end
+					store.godMode = true
+					store.attached = list[1] and list[1].Entity or nil
+					idleSince = tick()
+					local goal = #list > 0 and safeSpot(list) or body
+					if dodging then
+						goal += Vector3.new(0, 40, 0)
+					end
+					sendRoot(goal)
+				end))
+			else
+				release()
+			end
+		end,
+		Tooltip = 'Keeps the hitbox the server uses out of every enemy\'s reach while they are close.\nYour character and camera stay where you put them, only on your screen.'
+	})
+	Range = GodMode:CreateSlider({
+		Name = 'Range',
+		Min = 10,
+		Max = 60,
+		Default = 22,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end,
+		Tooltip = 'How close an enemy has to come before your hitbox leaves the ground'
+	})
+	Safe = GodMode:CreateSlider({
+		Name = 'Distance',
+		Min = 14,
+		Max = 25,
+		Default = 15,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end,
+		Tooltip = 'How far your hitbox stays from every enemy. They reach 13.5 studs, your own hits land from up to 17.'
+	})
+	Dodge = GodMode:CreateToggle({
+		Name = 'Dodge projectiles',
+		Default = true,
+		Tooltip = 'Lifts your hitbox another 40 studs when a shot is heading for it'
+	})
+end)
+
+
+run(function()
+	local PlayerAttach
+	local Targets
+	local Range
+	local Height
+	local lastGround
+	local attached = false
+	local rayCheck = RaycastParams.new()
+	rayCheck.FilterType = Enum.RaycastFilterType.Exclude
+	local blockCheck = RaycastParams.new()
+	blockCheck.FilterType = Enum.RaycastFilterType.Include
+
+	local function onBlock(position, distance)
+		local container = workspace:FindFirstChild('BlockContainer')
+		if not container then return nil end
+		blockCheck.FilterDescendantsInstances = {container}
+		return workspace:Raycast(position, Vector3.new(0, -distance, 0), blockCheck)
+	end
+
+	-- puts you back on something solid once there is nobody to stick to
+	local function release()
+		if not attached then return end
+		attached = false
+		store.playerAttach = nil
+		store.attached = nil
+		if not entitylib.isAlive or store.split or outranked('playerAttach') then return end
+		local hit = onBlock(realRoot().Position, 80)
+		local position = hit and hit.Position + Vector3.new(0, entitylib.character.HipHeight + 0.2, 0) or lastGround
+		if position then
+			sendRoot(position)
+		end
+	end
+
+	PlayerAttach = vape.Categories.Blatant:CreateModule({
+		Name = 'PlayerAttach',
+		Tooltip = 'Attaches you to the nearest target',
+		Function = function(call)
+			if call then
+				PlayerAttach:Clean(entitylib.Events.LocalRemoved:Connect(function()
+					attached = false
+					store.playerAttach = nil
+					lastGround = nil
+				end))
+				local plr, nextScan = nil, 0
+				local function sortHealth(a, b)
+					return a.Entity.Health < b.Entity.Health
+				end
+				repeat
+					if entitylib.isAlive and not outranked('playerAttach') then
+						local root = bodyRoot()
+						if not attached and entitylib.character.Humanoid.FloorMaterial ~= Enum.Material.Air and onBlock(root.Position, entitylib.character.HipHeight + 3) then
+							lastGround = root.Position
+						end
+						if tick() >= nextScan then
+							nextScan = tick() + 0.1
+							plr = entitylib.AllPosition({
+								Range = attached and Range.Value + Height.Value or Range.Value,
+								Wallcheck = Targets.Walls.Enabled or nil,
+								Part = 'RootPart',
+								Players = Targets.Players.Enabled,
+								Priority = Targets.Priority and Targets.Priority.Value,
+								NPCs = Targets.NPCs.Enabled,
+								Limit = 1,
+								Sort = sortHealth
+							})[1]
+						end
+						if plr and plr.RootPart and plr.RootPart.Parent and isnetworkowner(realRoot()) then
+							attached = true
+							store.playerAttach = true
+							store.attached = plr
+							if Height.Value > 0 then
+								sendRoot(attachPosition(plr, Height.Value))
+							else
+								rayCheck.FilterDescendantsInstances = {plr.RootPart.Parent, lplr.Character}
+								sendRoot(attachPosition(plr, 0) + (not workspace:Raycast(plr.RootPart.Position, plr.RootPart.CFrame.LookVector, rayCheck) and (plr.RootPart.CFrame.LookVector * 1.4) or Vector3.zero))
+							end
+						else
+							release()
+						end
+					else
+						plr = nil
+						if attached then
+							store.attached = nil
+						end
+						attached = false
+						store.playerAttach = nil
+					end
+					task.wait()
+				until not PlayerAttach.Enabled
+			else
+				release()
+			end
+		end
+	})
+
+	Targets = PlayerAttach:CreateTargets({
+		Players = true,
+		NPCs = true
+	})
+
+	Range = PlayerAttach:CreateSlider({
+		Name = 'Range',
+		Min = 1,
+		Max = 100,
+		Default = 23,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end
+	})
+
+	Height = PlayerAttach:CreateSlider({
+		Name = 'Height',
+		Min = 0,
+		Max = 17,
+		Default = 0,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end,
+		Tooltip = 'How far above the target you stay. Their hits stop reaching at 14, yours land from up to 17.'
+	})
+end)
+
+
+run(function()
+	local InfiniteAura
+	local Range
+	local Height
+	local target
+	local idleSince = 0
+
+	local function release()
+		target = nil
+		store.infiniteAura = nil
+		mergeRoot('InfiniteAura')
+	end
+
+	local function candidates(origin)
+		local list = {}
+		for _, ent in entitylib.List do
+			if ent.Targetable and ent.Player and ent.RootPart and ent.RootPart.Parent and ent.Health > 0 and not fallen(ent) and (ent.RootPart.Position - origin).Magnitude <= Range.Value then
+				table.insert(list, ent)
+			end
+		end
+		return list
+	end
+
+	-- the weakest one, since moving to a new target costs about as long as a hit does
+	local function choose(list)
+		local best
+		for _, ent in list do
+			if not best or ent.Health < best.Health then
+				best = ent
+			end
+		end
+		return best
+	end
+
+	InfiniteAura = vape.Categories.Blatant:CreateModule({
+		Name = 'InfiniteAura',
+		Function = function(callback)
+			if callback then
+				InfiniteAura:Clean(runService.Heartbeat:Connect(function()
+					local sword = store.tools.sword
+					if not entitylib.isAlive or not sword or outranked('infiniteAura') then
+						release()
+						return
+					end
+					local list = candidates(bodyRoot().Position)
+					if #list == 0 then
+						target = nil
+						store.infiniteAura = nil
+						if tick() - idleSince > 1 then
+							mergeRoot('InfiniteAura')
+						end
+						return
+					end
+
+					if not splitRoot('InfiniteAura') then return end
+					store.infiniteAura = true
+					idleSince = tick()
+					store.noShoot = tick() + 1
+
+					if not (target and table.find(list, target)) then
+						target = choose(list)
+					end
+
+					sendRoot(attachPosition(target, Height.Value))
+					targetinfo.Targets[target] = tick() + 1
+					local struck = false
+					local origin = realRoot().Position
+					for _, ent in list do
+						if (ent == target or (ent.RootPart.Position - origin).Magnitude <= 17) and strikeReady(ent) then
+							if not struck then
+								struck = true
+								equip(sword)
+							end
+							fireRemote('strike', ent.Player)
+						end
+					end
+					if struck then
+						equip(nil)
+					end
+				end))
+			else
+				release()
+			end
+		end,
+		Tooltip = 'Hits every enemy in range, however far, by sending the hitbox the server uses\nabove each of them in turn. Your character and camera never move.'
+	})
+	Range = InfiniteAura:CreateSlider({
+		Name = 'Range',
+		Min = 20,
+		Max = 1000,
+		Default = 150,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end
+	})
+	Height = InfiniteAura:CreateSlider({
+		Name = 'Height',
+		Min = 0,
+		Max = 17,
+		Default = 15,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end,
+		Tooltip = 'How far above each enemy the hitbox hangs. They reach 13.5 studs, your hits land from up to 17.'
+	})
+end)
+
+
+run(function()
+	local AutoWin
+	local Eggs
+	local EggHeight = {Object = {}, Value = 20}
+	local Height
+	local Notify
+	local home
+	local lastGround
+	local target
+	local egg
+	local eggStarted = 0
+	local oldSlot
+	local lastStrike = 0
+	local announced = false
+	local view
+	local skipped = setmetatable({}, {__mode = 'k'})
+	local rayCheck = RaycastParams.new()
+	rayCheck.FilterType = Enum.RaycastFilterType.Include
+
+	local function onBlock(position, distance)
+		local container = workspace:FindFirstChild('BlockContainer')
+		if not container then return false end
+		rayCheck.FilterDescendantsInstances = {container}
+		return workspace:Raycast(position, Vector3.new(0, -distance, 0), rayCheck) ~= nil
+	end
+
+	local function moveTo(position)
+		sendRoot(position)
+	end
+
+	-- really selects the hotbar slot, so the tool is in your hand for everyone
+	local function hold(tool, slot)
+		if store.hand ~= tool and slot and slot <= 7 then
+			local current = skywars.Store:getState().ActiveSlot
+			if current ~= slot then
+				oldSlot = oldSlot or current
+				skywars.HotbarController:setActiveSlot(slot)
+			end
+		end
+		equip(tool)
+	end
+
+	local function stop(goHome)
+		target = nil
+		egg = nil
+		view = nil
+		store.autoWin = nil
+		mergeRoot('AutoWin')
+		if oldSlot then
+			local slot = oldSlot
+			oldSlot = nil
+			if entitylib.isAlive and skywars.Store:getState().ActiveSlot ~= slot then
+				skywars.HotbarController:setActiveSlot(slot)
+			end
+		end
+		equip(nil)
+		if goHome and home and entitylib.isAlive and not store.split and not outranked('autoWin') then
+			moveTo(home)
+		end
+		home = nil
+	end
+
+	local function nextEgg(eggs, origin)
+		local best, bestDistance
+		for _, v in eggs do
+			if v.PrimaryPart and (v:GetAttribute('Health') or 0) > 0 and v:GetAttribute('TeamId') ~= lplr:GetAttribute('TeamId') and (skipped[v] or 0) < tick() then
+				local distance = (v.PrimaryPart.Position - origin).Magnitude
+				if not bestDistance or distance < bestDistance then
+					best, bestDistance = v, distance
+				end
+			end
+		end
+		return best
+	end
+
+	local function validTarget(ent)
+		if not (ent and ent.Targetable and ent.RootPart and ent.RootPart.Parent and ent.Health > 0) or fallen(ent) then return false end
+		return table.find(entitylib.List, ent) ~= nil
+	end
+
+	local function step(eggs, dt)
+		if not entitylib.isAlive or outranked('autoWin') then
+			target = nil
+			egg = nil
+			view = nil
+			store.autoWin = nil
+			mergeRoot('AutoWin')
+			return
+		end
+		if skywars.Store:getState().GameState ~= 'InGame' then
+			stop(true)
+			announced = false
+			return
+		end
+
+		local root = realRoot()
+		if not home and entitylib.character.Humanoid.FloorMaterial ~= Enum.Material.Air and onBlock(bodyRoot().Position, entitylib.character.HipHeight + 3) then
+			lastGround = bodyRoot().Position
+		end
+
+		-- eggs first, or everyone just respawns
+		if Eggs.Enabled then
+			if egg and (not (egg.Parent and egg.PrimaryPart) or (egg:GetAttribute('Health') or 0) <= 0) then
+				egg = nil
+			end
+			if egg and tick() - eggStarted > 8 then
+				skipped[egg] = tick() + 15
+				egg = nil
+			end
+			if not egg then
+				egg = nextEgg(eggs, root.Position)
+				eggStarted = tick()
+			end
+		else
+			egg = nil
+		end
+
+		if not egg and not validTarget(target) then
+			target = nil
+			local nearest
+			for _, ent in entitylib.List do
+				if ent.Player and validTarget(ent) then
+					local distance = (ent.RootPart.Position - root.Position).Magnitude
+					if not nearest or distance < nearest then
+						target, nearest = ent, distance
+					end
+				end
+			end
+		end
+
+		if not egg and not target then
+			if home then
+				stop(true)
+				if Notify.Enabled and not announced then
+					announced = true
+					notif('AutoWin', 'Nobody is left to fight.', 5)
+				end
+			end
+			return
+		end
+
+		if not home then
+			home = lastGround or bodyRoot().Position
+			store.autoWin = true
+			announced = false
+		end
+		store.noShoot = tick() + 1
+
+		if egg then
+			view = nil
+			mergeRoot('AutoWin')
+			local pick, sword = store.tools.pickaxe, store.tools.sword
+			local position = egg.PrimaryPart.Position
+			if pick then
+				moveTo(position + Vector3.new(0, EggHeight.Value, 0))
+				hold(pick, store.tools.pickaxeSlot)
+				fireRemote('hitBlock', (position + Vector3.new(0, 1.5, 0)) // 1)
+			elseif sword then
+				moveTo(position + Vector3.new(0, math.min(EggHeight.Value, 14), 0))
+				hold(sword, store.tools.swordSlot)
+				if lastStrike < tick() then
+					lastStrike = tick() + 0.05
+					fireRemote('strikeEntity', egg)
+				end
+			end
+			return
+		end
+
+		local sword = store.tools.sword
+		if not sword then return end
+		local goal = attachPosition(target, Height.Value)
+		if splitRoot('AutoWin') then
+			-- the hitbox does the jumping about, the body you watch glides after the target
+			sendRoot(goal)
+			local body = bodyRoot()
+			local want = target.RootPart.Position + Vector3.new(0, Height.Value, 0)
+			want = Vector3.new(want.X, math.max(want.Y, voidFloor()), want.Z)
+			view = (view or body.Position):Lerp(want, 1 - math.exp(-(dt or 1 / 60) * 6))
+			body.CFrame = CFrame.new(view) * (body.CFrame - body.CFrame.Position)
+			body.AssemblyLinearVelocity = Vector3.zero
+		else
+			view = nil
+			moveTo(goal)
+		end
+		hold(sword, store.tools.swordSlot)
+		targetinfo.Targets[target] = tick() + 1
+		if targetinfo.Focus then
+			targetinfo.Focus[target] = tick() + 1
+		end
+		-- every frame the cooldown allows, for the target and anyone else in reach
+		if strikeReady(target) then
+			fireRemote('strike', target.Player)
+		end
+		for _, ent in entitylib.List do
+			if ent ~= target and ent.Targetable and ent.Player and ent.RootPart and ent.Health > 0 and (ent.RootPart.Position - root.Position).Magnitude <= 17 and strikeReady(ent) then
+				fireRemote('strike', ent.Player)
+			end
+		end
+	end
+
+	AutoWin = vape.Categories.Utility:CreateModule({
+		Name = 'AutoWin v2',
+		Function = function(callback)
+			if callback then
+				local eggs = collection('egg', AutoWin)
+				AutoWin:Clean(entitylib.Events.LocalRemoved:Connect(function()
+					target = nil
+					egg = nil
+					home = nil
+					lastGround = nil
+					oldSlot = nil
+					view = nil
+					store.autoWin = nil
+				end))
+				AutoWin:Clean(runService.Heartbeat:Connect(function(dt)
+					step(eggs, dt)
+				end))
+			else
+				stop(true)
+			end
+		end,
+		Tooltip = 'Breaks every enemy egg, then sticks to each enemy\nin turn until nobody is left.'
+	})
+	Eggs = AutoWin:CreateToggle({
+		Name = 'Break eggs first',
+		Default = true,
+		Function = function(callback)
+			EggHeight.Object.Visible = callback
+		end
+	})
+	EggHeight = AutoWin:CreateSlider({
+		Name = 'Egg height',
+		Min = 8,
+		Max = 22,
+		Default = 20,
+		Darker = true,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end,
+		Tooltip = 'How far above an egg you hang. A pickaxe reaches from 22, a sword from 14.'
+	})
+	Height = AutoWin:CreateSlider({
+		Name = 'Player height',
+		Min = 0,
+		Max = 17,
+		Default = 15,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end,
+		Tooltip = 'How far above a player you stay. They reach 13.5 studs, your hits land from up to 17.'
+	})
+	Notify = AutoWin:CreateToggle({
+		Name = 'Notify',
+		Default = true
+	})
+end)
+
+
+run(function()
+	local ShopClicker
+	local HoldDelay
+	local CPS
+	local guiService = cloneref(game:GetService('GuiService'))
+	local holding = false
+	local clickThread
+	local catalog
+
+	-- every blacksmith item by the name its card carries, with the call that buys it
+	local function items()
+		if catalog then return catalog end
+		local shop = skywars.Shop and skywars.Shop.Blacksmith
+		if type(shop) ~= 'table' then return {} end
+		catalog = {}
+		for _, upgrade in shop.ItemUpgrades or {} do
+			for _, item in upgrade.Items or {} do
+				if item.ItemType then
+					catalog[item.ItemType] = {Remote = 'purchaseItemUpgrade', Index = upgrade.ItemIndex, Item = item}
+				end
+			end
+		end
+		for _, item in shop.Items or {} do
+			if item.ItemType then
+				catalog[item.ItemType] = {Remote = 'purchaseItem', Index = item.ItemIndex, Item = item}
+			end
+		end
+		return catalog
+	end
+
+	local function getHoveredItem()
+		local list = items()
+		local mouse = inputService:GetMouseLocation() - guiService:GetGuiInset()
+		for _, v in lplr.PlayerGui:GetGuiObjectsAtPosition(mouse.X, mouse.Y) do
+			local obj = v
+			while obj and obj ~= lplr.PlayerGui do
+				-- the card is the one frame that holds both the picture and the buy button
+				if list[obj.Name] and obj:FindFirstChild('ButtonClipping', true) then
+					return obj.Name
+				end
+				obj = obj.Parent
+			end
+		end
+		return nil
+	end
+
+	local function purchase(name)
+		local entry = items()[name]
+		if not (entry and entry.Index) then return end
+		local currency = skywars.Store:getState().GameCurrency
+		local have = currency and currency.Quantities and currency.Quantities[entry.Item.CurrencyType] or 0
+		if entry.Item.Price and have < entry.Item.Price then return end
+		fireRemote(entry.Remote, 'Blacksmith', entry.Index)
+	end
+
+	local function startClicking(name)
+		if clickThread then
+			task.cancel(clickThread)
+		end
+		clickThread = task.spawn(function()
+			repeat
+				-- the card is only under the cursor while the shop is open
+				if getHoveredItem() == name then
+					purchase(name)
+				end
+				task.wait(1 / CPS.Value)
+			until not holding
+			clickThread = nil
+		end)
+	end
+
+	ShopClicker = vape.Categories.Utility:CreateModule({
+		Name = 'ShopClicker',
+		Function = function(callback)
+			if callback then
+				ShopClicker:Clean(inputService.InputBegan:Connect(function(input)
+					if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+					local name = getHoveredItem()
+					if not name then return end
+
+					holding = true
+					task.delay(HoldDelay.Value, function()
+						if holding and getHoveredItem() == name then
+							startClicking(name)
+						end
+					end)
+				end))
+
+				ShopClicker:Clean(inputService.InputEnded:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 then
+						holding = false
+					end
+				end))
+			else
+				holding = false
+				if clickThread then
+					task.cancel(clickThread)
+					clickThread = nil
+				end
+			end
+		end,
+		Tooltip = 'Hold on a blacksmith item to rapidly buy or upgrade it'
+	})
+	HoldDelay = ShopClicker:CreateSlider({
+		Name = 'Hold Delay',
+		Min = 0,
+		Max = 1,
+		Default = 0.15,
+		Decimal = 20,
+		Suffix = 'seconds'
+	})
+	CPS = ShopClicker:CreateSlider({
+		Name = 'CPS',
+		Min = 1,
+		Max = 20,
+		Default = 20,
+		Darker = true
+	})
+end)
+
+
+run(function()
+	local GameStaller
+	local Height
+	local Hidden
+	local Notify
+	local home
+	local announced = false
+
+	local function stop()
+		local position = home
+		home = nil
+		store.staller = nil
+		if store.split then
+			mergeRoot('GameStaller')
+		elseif position and entitylib.isAlive then
+			sendRoot(position)
+		end
+	end
+
+	GameStaller = vape.Categories.Utility:CreateModule({
+		Name = 'GameStaller',
+		Function = function(callback)
+			if callback then
+				GameStaller:Clean(entitylib.Events.LocalRemoved:Connect(function()
+					home = nil
+					store.staller = nil
+				end))
+				GameStaller:Clean(runService.Heartbeat:Connect(function()
+					if not entitylib.isAlive or skywars.Store:getState().GameState ~= 'InGame' then
+						if home then
+							stop()
+						end
+						announced = false
+						return
+					end
+					if not home then
+						home = bodyRoot().Position
+					end
+					if Hidden.Enabled then
+						splitRoot('GameStaller')
+					elseif store.split then
+						mergeRoot('GameStaller')
+					end
+					store.staller = true
+					sendRoot(Vector3.new(home.X, home.Y + Height.Value, home.Z))
+					if Notify.Enabled and not announced then
+						announced = true
+						notif('GameStaller', 'Your hitbox is '..Height.Value..' studs above the map until the game ends.', 6)
+					end
+				end))
+			else
+				stop()
+			end
+		end,
+		Tooltip = 'Parks the hitbox the server uses far above the map from the start\nof the game until it ends, so nobody can reach you.'
+	})
+	Height = GameStaller:CreateSlider({
+		Name = 'Height',
+		Min = 200,
+		Max = 5000,
+		Default = 1500,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end
+	})
+	Hidden = GameStaller:CreateToggle({
+		Name = 'Keep my view',
+		Default = true,
+		Tooltip = 'Only the hitbox goes up. Your character and camera stay on the map, on your screen only.'
+	})
+	Notify = GameStaller:CreateToggle({
+		Name = 'Notify',
+		Default = true
+	})
+end)
