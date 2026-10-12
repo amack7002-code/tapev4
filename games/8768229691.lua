@@ -1800,6 +1800,8 @@ run(function()
 end)
 
 run(function()
+	local AutoWin
+	
 	AutoWin = vape.Minigames:CreateModule({
 		Name = 'AutoWin',
 		Function = function(callback)
@@ -1812,12 +1814,12 @@ run(function()
 					Killaura:Toggle(true)
 				end
 
-				task.spawn(function()
+				-- Main loop
+				AutoWin:Clean(task.spawn(function()
 					while AutoWin.Enabled do
 						local targetEgg = nil
 						local lowestHealth = math.huge
 
-						-- Find the egg with the lowest health
 						local eggs = workspace:FindFirstChild("Eggs") or collection("egg")
 						if eggs then
 							for _, egg in pairs(eggs:GetChildren()) do
@@ -1829,14 +1831,14 @@ run(function()
 							end
 						end
 
-						-- Look at / go to the egg
 						if targetEgg and entitylib.character and entitylib.character.RootPart then
+							-- Go to egg
 							entitylib.character.RootPart.CFrame = CFrame.lookAlong(
 								targetEgg.Position,
 								entitylib.character.RootPart.CFrame.LookVector
 							)
 						else
-							-- No eggs left → look for an enemy player
+							-- No eggs left → go to enemy player
 							for _, plr in pairs(playersService:GetPlayers()) do
 								if plr ~= lplr and plr:GetAttribute("TeamId") ~= lplr:GetAttribute("TeamId") then
 									local char = plr.Character
@@ -1853,7 +1855,7 @@ run(function()
 
 						task.wait(0.1)
 					end
-				end)
+				end))
 			end
 		end,
 		Tooltip = 'Automatically wins for you'
