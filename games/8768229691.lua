@@ -1801,63 +1801,97 @@ end)
 
 run(function()
 	local AutoWin
-	
-	AutoWin = vape.Minigames:CreateModule({
+	local previousStates
+
+	AutoWin = vape.Categories.Minigames:CreateModule({
 		Name = 'AutoWin',
 		Function = function(callback)
 			if callback then
-				-- Enable required modules
-				if Breaker and not Breaker.Enabled then
-					Breaker:Toggle(true)
-				end
-				if Killaura and not Killaura.Enabled then
-					Killaura:Toggle(true)
+				local Breaker = vape.Modules.Breaker
+				local Killaura = vape.Modules.Killaura
+				if not (Breaker and Killaura) then
+					AutoWin:Toggle()
+					notif('AutoWin', 'Breaker or Killaura is unavailable.', 5, 'alert')
+					return
 				end
 
-				-- Main loop
+				previousStates = {
+					Breaker = Breaker.Enabled,
+					Killaura = Killaura.Enabled
+				}
+				if not previousStates.Breaker then
+					Breaker:Toggle()
+				end
+				if not previousStates.Killaura then
+					Killaura:Toggle()
+				end
+
+				local eggs = collection('egg', AutoWin)
 				AutoWin:Clean(task.spawn(function()
 					while AutoWin.Enabled do
-						local targetEgg = nil
+						if not entitylib.isAlive then
+							task.wait(0.1)
+							continue
+						end
+
+						local root = entitylib.character.RootPart
+						local localTeamId = lplr:GetAttribute('TeamId')
+						local targetEgg
 						local lowestHealth = math.huge
-
-						local eggs = workspace:FindFirstChild("Eggs") or collection("egg")
-						if eggs then
-							for _, egg in pairs(eggs:GetChildren()) do
-								local health = egg:GetAttribute("Health")
-								if typeof(health) == "number" and health > 0 and health < lowestHealth then
-									lowestHealth = health
-									targetEgg = egg
-								end
+						for _, egg in eggs do
+							if egg:GetAttribute('TeamId') == localTeamId then
+								continue
+							end
+							local health = egg:GetAttribute('Health')
+							local eggRoot = egg:IsA('Model') and (egg.PrimaryPart or egg:FindFirstChildWhichIsA('BasePart')) or egg
+							if eggRoot and typeof(health) == 'number' and health > 0 and health < lowestHealth then
+								lowestHealth = health
+								targetEgg = eggRoot
 							end
 						end
 
-						if targetEgg and entitylib.character and entitylib.character.RootPart then
-							-- Go to egg
-							entitylib.character.RootPart.CFrame = CFrame.lookAlong(
-								targetEgg.Position,
-								entitylib.character.RootPart.CFrame.LookVector
-							)
-						else
-							-- No eggs left → go to enemy player
-							for _, plr in pairs(playersService:GetPlayers()) do
-								if plr ~= lplr and plr:GetAttribute("TeamId") ~= lplr:GetAttribute("TeamId") then
-									local char = plr.Character
-									if char and char:FindFirstChild("HumanoidRootPart") then
-										entitylib.character.RootPart.CFrame = CFrame.lookAlong(
-											char.HumanoidRootPart.Position,
-											entitylib.character.RootPart.CFrame.LookVector
-										)
-										break
-									end
+						if targetEgg then
+							local targetPosition = targetEgg.Position
+						if (root.Position - targetPosition).Magnitude > 6 then
+							local destination = targetPosition - root.CFrame.LookVector * 4
+							root.CFrame = CFrame.lookAt(destination, targetPosition)
+						end
+					else
+						local target
+						local nearestDistance = math.huge
+						for _, entity in entitylib.List do
+							if entity.Player and entity.Targetable and entity.Health > 0 and entity.RootPart then
+								local distance = (root.Position - entity.RootPart.Position).Magnitude
+								if distance < nearestDistance then
+									nearestDistance = distance
+									target = entity.RootPart
 								end
 							end
 						end
-
-						task.wait(0.1)
+						if target and nearestDistance > 6 then
+							local targetPosition = target.Position
+							local destination = targetPosition - root.CFrame.LookVector * 4
+							root.CFrame = CFrame.lookAt(destination, targetPosition)
+						end
 					end
-				end))
+
+					task.wait(0.1)
+				end
+			end))
+			else
+				if previousStates then
+					local Breaker = vape.Modules.Breaker
+					local Killaura = vape.Modules.Killaura
+					if Breaker and not previousStates.Breaker and Breaker.Enabled then
+						Breaker:Toggle()
+					end
+					if Killaura and not previousStates.Killaura and Killaura.Enabled then
+						Killaura:Toggle()
+					end
+					previousStates = nil
+				end
 			end
 		end,
-		Tooltip = 'Automatically wins for you'
+		Tooltip = 'Prioritizes enemy eggs, then nearby enemies, while enabling egg-breaking and combat modules.'
 	})
 end)
