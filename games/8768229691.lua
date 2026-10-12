@@ -1799,61 +1799,63 @@ run(function()
 	})
 end)
 
-AutoWin = vape.Minigames:CreateModule({
-	Name = 'AutoWin',
-	Function = function(callback)
-		if callback then
-			-- Enable required modules
-			if Breaker and not Breaker.Enabled then
-				Breaker:Toggle(true)
-			end
-			if Killaura and not Killaura.Enabled then
-				Killaura:Toggle(true)
-			end
+run(function()
+	AutoWin = vape.Minigames:CreateModule({
+		Name = 'AutoWin',
+		Function = function(callback)
+			if callback then
+				-- Enable required modules
+				if Breaker and not Breaker.Enabled then
+					Breaker:Toggle(true)
+				end
+				if Killaura and not Killaura.Enabled then
+					Killaura:Toggle(true)
+				end
 
-			task.spawn(function()
-				while AutoWin.Enabled do
-					local targetEgg = nil
-					local lowestHealth = math.huge
+				task.spawn(function()
+					while AutoWin.Enabled do
+						local targetEgg = nil
+						local lowestHealth = math.huge
 
-					-- Find the egg with the lowest health
-					local eggs = workspace:FindFirstChild("Eggs") or collection("egg")
-					if eggs then
-						for _, egg in pairs(eggs:GetChildren()) do
-							local health = egg:GetAttribute("Health")
-							if typeof(health) == "number" and health > 0 and health < lowestHealth then
-								lowestHealth = health
-								targetEgg = egg
-							end
-						end
-					end
-
-					-- Look at / go to the egg
-					if targetEgg and entitylib.character and entitylib.character.RootPart then
-						entitylib.character.RootPart.CFrame = CFrame.lookAlong(
-							targetEgg.Position,
-							entitylib.character.RootPart.CFrame.LookVector
-						)
-					else
-						-- No eggs left → look for an enemy player
-						for _, plr in pairs(playersService:GetPlayers()) do
-							if plr ~= lplr and plr:GetAttribute("TeamId") ~= lplr:GetAttribute("TeamId") then
-								local char = plr.Character
-								if char and char:FindFirstChild("HumanoidRootPart") then
-									entitylib.character.RootPart.CFrame = CFrame.lookAlong(
-										char.HumanoidRootPart.Position,
-										entitylib.character.RootPart.CFrame.LookVector
-									)
-									break
+						-- Find the egg with the lowest health
+						local eggs = workspace:FindFirstChild("Eggs") or collection("egg")
+						if eggs then
+							for _, egg in pairs(eggs:GetChildren()) do
+								local health = egg:GetAttribute("Health")
+								if typeof(health) == "number" and health > 0 and health < lowestHealth then
+									lowestHealth = health
+									targetEgg = egg
 								end
 							end
 						end
-					end
 
-					task.wait(0.1)
-				end
-			end)
-		end
-	end,
-	Tooltip = 'Automatically wins for you'
-})
+						-- Look at / go to the egg
+						if targetEgg and entitylib.character and entitylib.character.RootPart then
+							entitylib.character.RootPart.CFrame = CFrame.lookAlong(
+								targetEgg.Position,
+								entitylib.character.RootPart.CFrame.LookVector
+							)
+						else
+							-- No eggs left → look for an enemy player
+							for _, plr in pairs(playersService:GetPlayers()) do
+								if plr ~= lplr and plr:GetAttribute("TeamId") ~= lplr:GetAttribute("TeamId") then
+									local char = plr.Character
+									if char and char:FindFirstChild("HumanoidRootPart") then
+										entitylib.character.RootPart.CFrame = CFrame.lookAlong(
+											char.HumanoidRootPart.Position,
+											entitylib.character.RootPart.CFrame.LookVector
+										)
+										break
+									end
+								end
+							end
+						end
+
+						task.wait(0.1)
+					end
+				end)
+			end
+		end,
+		Tooltip = 'Automatically wins for you'
+	})
+end)
