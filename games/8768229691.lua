@@ -1925,6 +1925,6 @@ run(function()
 				end
 			end
 		end,
-		Tooltip = 'Prioritizes enemy eggs, then nearby enemies, while enabling egg-breaking and combat modules.'
+		Tooltip = 'Automatically wins for you'
 	})
 end)
