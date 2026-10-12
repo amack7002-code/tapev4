@@ -45,16 +45,6 @@ local store = {
 }
 local ViewmodelTool
 local ViewmodelMotor
-local SkipBelowY
-local SkipAtZ
-
-local function skipAutoWinPosition(position)
-	local autoWin = vape.Modules.AutoWin
-	return autoWin and autoWin.Enabled and (
-		(SkipBelowY and position.Y <= SkipBelowY.Value)
-		or (SkipAtZ and position.Z >= SkipAtZ.Value)
-	) or false
-end
 
 local function collection(tags, module, customadd, customremove)
 	tags = typeof(tags) ~= 'table' and {tags} or tags
@@ -862,7 +852,6 @@ run(function()
 								if #attacked >= Max.Value then break end
 								if not v.Player or not v.RootPart or not v.RootPart.Parent or (v.Health or 0) <= 0 then continue end
 								local targetPosition = v.RootPart.Position
-								if skipAutoWinPosition(targetPosition) then continue end
 								if v.Player:GetAttribute('InVoid') or v.Player:GetAttribute('PlayerConnected') == false then continue end
 								local delta = (targetPosition - entitylib.character.RootPart.Position)
 								if delta.X == 0 and delta.Z == 0 then continue end
@@ -1940,10 +1929,6 @@ run(function()
 							local health = egg:GetAttribute('Health')
 							local eggRoot = egg:IsA('Model') and (egg.PrimaryPart or egg:FindFirstChildWhichIsA('BasePart')) or egg
 							if eggRoot and eggRoot.Parent and typeof(health) == 'number' and health > 0 and health < lowestHealth then
-								local eggPosition = eggRoot.Position
-								if skipAutoWinPosition(eggPosition) then
-									continue
-								end
 								lowestHealth = health
 								targetEgg = eggRoot
 							end
@@ -1963,7 +1948,6 @@ run(function()
 							for _, entity in entitylib.List do
 								if entity.Player and entity.Targetable and (entity.Health or 0) > 0 and entity.RootPart and entity.RootPart.Parent then
 									local targetPosition = entity.RootPart.Position
-									if skipAutoWinPosition(targetPosition) then continue end
 									if entity.Player:GetAttribute('InVoid') or entity.Player:GetAttribute('PlayerConnected') == false then continue end
 									local distance = (root.Position - targetPosition).Magnitude
 									if distance < nearestDistance then
@@ -1989,7 +1973,7 @@ run(function()
 							status = 'No eligible targets'
 							if not warnedNoTargets then
 								warnedNoTargets = true
-								notif('AutoWin', 'No eligible targets. Check the Y/Z skip limits and wait for enemies to spawn.', 5, 'alert')
+								notif('AutoWin', 'No eligible targets. Waiting for enemy players or eggs to spawn.', 5, 'alert')
 							end
 						end
 						task.wait(0.1)
@@ -2018,21 +2002,5 @@ run(function()
 		end,
 		ExtraText = function() return status end,
 		Tooltip = 'Automatically targets enemy eggs and players'
-	})
-	SkipBelowY = AutoWin:CreateSlider({
-		Name = 'Skip targets below Y',
-		Min = -1000,
-		Max = 1000,
-		Default = math.clamp(workspace.FallenPartsDestroyHeight + 12, -1000, 1000),
-		Suffix = ' studs',
-		Tooltip = 'skip eggs and players at or below this height while AutoWin is enabled'
-	})
-	SkipAtZ = AutoWin:CreateSlider({
-		Name = 'Skip targets at/after Z',
-		Min = -10000,
-		Max = 10000,
-		Default = 10000,
-		Suffix = ' studs',
-		Tooltip = 'skip eggs and players at or beyond this Z coordinate while AutoWin is enabled'
 	})
 end)
