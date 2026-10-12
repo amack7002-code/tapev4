@@ -929,7 +929,7 @@ run(function()
 						v.Parent = attacked[i] and gameCamera or nil
 					end
 	
-					task.wait(0.05)
+					task.wait()
 				until not Killaura.Enabled
 			else
 				for i, v in Boxes do
@@ -2009,7 +2009,7 @@ run(function()
 								notif('AutoWin', 'No eligible targets. Waiting for enemy players or eggs to spawn.', 5, 'alert')
 							end
 						end
-						task.wait() -- faster TP
+						task.wait(.00001) -- faster TP
 					end
 				end)
 				local activeWorker = worker
