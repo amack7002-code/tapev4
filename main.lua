@@ -311,7 +311,11 @@ if not shared.VapeIndependent then
 				if not isfile(path) then
 					writefile(path, '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n' .. res)
 				end
-				loadstring(readfile(path), tostring(gameFileId))(...)
+				local gameChunk, gameChunkErr = loadstring(readfile(path), tostring(gameFileId))
+				if not gameChunk then
+					error('[aerov4] failed to compile downloaded game script ' .. gameFileId .. ': ' .. tostring(gameChunkErr))
+				end
+				gameChunk(...)
 			end
 		end
 	end
