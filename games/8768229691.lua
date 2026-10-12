@@ -1972,7 +1972,7 @@ run(function()
 							status = 'Targeting egg'
 							local targetPosition = targetEgg.Position
 							if (root.Position - targetPosition).Magnitude > 6 then
-								local destination = targetPosition - root.CFrame.LookVector * 4
+								local destination = targetPosition - Vector3.new(0, 8, 0) -- under them
 								root.CFrame = CFrame.lookAt(destination, targetPosition)
 							end
 						else
