@@ -285,11 +285,10 @@ run(function()
 local Fly
 local LongJump
 run(function()
-	local UpKey
-	local DownKey
+	local Keys
 	local Value
 	local VerticalValue
-	local up, down = 0, 0
+	local up = 0
 
 	Fly = vape.Categories.Blatant:CreateModule({
 		Name = 'Fly',
@@ -298,21 +297,16 @@ run(function()
 				Fly:Clean(runService.PreSimulation:Connect(function(dt)
 					if entitylib.isAlive then
 						local movedir = calculateMoveVector() * Value.Value
-						local velocity = debug.getupvalue(arena.TickFunction, 6)
+						local keys = Keys.Value:split('/')
+						local focused = inputService:GetFocusedTextBox() ~= nil
+						local keyboardUp = not focused and inputService:IsKeyDown(Enum.KeyCode[keys[1]]) and 1 or 0
+						local keyboardDown = not focused and inputService:IsKeyDown(Enum.KeyCode[keys[2]]) and -1 or 0
 
-						debug.setupvalue(arena.TickFunction, 6, Vector3.new(movedir.X, 1 + ((up + down) * VerticalValue.Value), movedir.Z))
+						debug.setupvalue(arena.TickFunction, 6, Vector3.new(movedir.X, 1 + ((math.max(up, keyboardUp) + keyboardDown) * VerticalValue.Value), movedir.Z))
 					end
 				end))
 
-				up, down = 0, 0
-				Fly:Clean(UpKey.Triggered:Connect(function(isDown)
-					up = isDown and 1 or 0
-				end))
-
-				Fly:Clean(DownKey.Triggered:Connect(function(isDown)
-					down = isDown and -1 or 0
-				end))
-
+				up = 0
 				if inputService.TouchEnabled then
 					pcall(function()
 						local jumpButton = lplr.PlayerGui.TouchGui.TouchControlFrame.JumpButton
@@ -325,17 +319,11 @@ run(function()
 		end,
 		Tooltip = 'Makes you go zoom.'
 	})
-	UpKey = Fly:CreateBind({
-		Name = 'Up Key',
-		Default = {'Space'},
-		Hold = true,
-		Tooltip = 'Keybind to fly upwards'
-	})
-	DownKey = Fly:CreateBind({
-		Name = 'Down Key',
-		Default = {'LeftControl'},
-		Hold = true,
-		Tooltip = 'Keybind to fly downwards'
+	Keys = Fly:CreateDropdown({
+		Name = 'Keys',
+		List = {'Space/LeftControl', 'Space/LeftShift', 'E/Q', 'Space/Q'},
+		Default = 'Space/LeftControl',
+		Tooltip = 'Keys for flying upwards and downwards'
 	})
 	Value = Fly:CreateSlider({
 		Name = 'Speed',
