@@ -2,6 +2,7 @@ local Reach
 local Value
 local old
 
+run(function()
 Reach = vape.Categories.Combat:CreateModule({
 	Name = 'Reach',
 	Function = function(callback)
@@ -32,3 +33,4 @@ Value = Reach:CreateSlider({
 		return val == 1 and 'stud' or 'studs'
 	end
 })
+end)

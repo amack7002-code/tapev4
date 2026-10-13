@@ -17,6 +17,7 @@ local restoreCamera
 local guiService = cloneref(game:GetService('GuiService'))
 local Particles, Boxes, AttackDelay = {}, {}, tick()
 
+run(function()
 local function getAttackData()
 	if not (entitylib.isAlive and entitylib.character and entitylib.character.RootPart and entitylib.character.RootPart.Parent and gameCamera) then return false end
 	if inputService:GetFocusedTextBox() then return false end
@@ -351,4 +352,5 @@ vape:Clean(function()
 	for _, part in Particles do part:Destroy() end
 	table.clear(Boxes)
 	table.clear(Particles)
+end)
 end)

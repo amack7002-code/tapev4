@@ -1,5 +1,5 @@
 local AutoBlock
-
+run(function()
 AutoBlock = vape.Categories.Blatant:CreateModule({
 	Name = 'AutoBlock',
 	Function = function(callback)
@@ -27,3 +27,4 @@ AutoBlock = vape.Categories.Blatant:CreateModule({
 	end,
 	Tooltip = 'Automatically unblock and reblock before hitting'
 })
+end)

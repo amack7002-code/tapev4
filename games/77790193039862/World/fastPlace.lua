@@ -2,6 +2,7 @@ local FastPlace
 local Value
 local old
 
+run(function()
 FastPlace = vape.Categories.World:CreateModule({
 	Name = 'FastPlace',
 	Function = function(callback)
@@ -32,3 +33,4 @@ Value = FastPlace:CreateSlider({
 		return 'seconds'
 	end
 })
+end)

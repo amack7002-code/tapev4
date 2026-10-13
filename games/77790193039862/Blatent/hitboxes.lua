@@ -4,6 +4,7 @@ local TargetPart
 local Expand
 local modified = {}
 
+run(function()
 HitBoxes = vape.Categories.Blatant:CreateModule({
 	Name = 'HitBoxes',
 	Function = function(callback)
@@ -43,3 +44,4 @@ Expand = HitBoxes:CreateSlider({
 		return val == 1 and 'stud' or 'studs'
 	end
 })
+end)

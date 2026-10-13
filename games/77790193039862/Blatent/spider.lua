@@ -3,6 +3,7 @@ local rayCheck = RaycastParams.new()
 rayCheck.RespectCanCollide = true
 local Active
 
+run(function()
 Spider = vape.Categories.Blatant:CreateModule({
 	Name = 'Spider',
 	Function = function(callback)
@@ -50,3 +51,4 @@ Value = Spider:CreateSlider({
 		return val == 1 and 'stud' or 'studs'
 	end
 })
+end)

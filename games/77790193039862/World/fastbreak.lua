@@ -2,6 +2,7 @@ local FastBreak
 local Value
 local old
 
+run(function()
 FastBreak = vape.Categories.World:CreateModule({
 	Name = 'FastBreak',
 	Function = function(callback)
@@ -27,3 +28,4 @@ Value = FastBreak:CreateSlider({
 	Default = 3,
 	Decimal = 10
 })
+end)

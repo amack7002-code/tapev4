@@ -1,5 +1,6 @@
 local Sprint
 
+run(function()
 Sprint = vape.Categories.Combat:CreateModule({
 	Name = 'Sprint',
 	Function = function(callback)
@@ -12,3 +13,4 @@ Sprint = vape.Categories.Combat:CreateModule({
 	end,
 	Tooltip = 'Sets your sprinting to true.'
 })
+end)

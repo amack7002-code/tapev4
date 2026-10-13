@@ -6,6 +6,7 @@ local Targeting
 local connection
 local rand, old = Random.new()
 
+run(function()
 local function velocityFunction(...)
 	if rand:NextNumber(0, 100) > Chance.Value then return old(...) end
 
@@ -66,3 +67,4 @@ Chance = Velocity:CreateSlider({
 	Suffix = '%'
 })
 Targeting = Velocity:CreateToggle({Name = 'Only when targeting'})
+end)

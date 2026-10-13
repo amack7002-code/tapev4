@@ -2,6 +2,7 @@ local AutoClicker
 local CPS
 local Thread
 
+run(function()
 local function AutoClick()
 	if Thread then
 		task.cancel(Thread)
@@ -47,3 +48,4 @@ CPS = AutoClicker:CreateTwoSlider({
 	DefaultMin = 7,
 	DefaultMax = 7
 })
+end)

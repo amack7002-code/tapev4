@@ -2,6 +2,7 @@ local Speed
 local Value
 local AutoJump
 
+run(function()
 Speed = vape.Categories.Blatant:CreateModule({
     Name = 'Speed',
     Function = function(callback)
@@ -31,3 +32,4 @@ Value = Speed:CreateSlider({
 AutoJump = Speed:CreateToggle({
 	Name = 'AutoJump'
 })
+end)

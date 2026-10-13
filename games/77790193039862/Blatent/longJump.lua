@@ -1,6 +1,7 @@
 local Value
 local AutoDisable
 
+run(function()
 LongJump = vape.Categories.Blatant:CreateModule({
 	Name = 'LongJump',
 	Function = function(callback)
@@ -42,3 +43,4 @@ AutoDisable = LongJump:CreateToggle({
 	Name = 'Auto Disable',
 	Default = true
 })
+end)

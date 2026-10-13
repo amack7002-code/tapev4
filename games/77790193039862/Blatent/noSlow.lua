@@ -1,6 +1,6 @@
 local NoSlowdown
 local old
-
+run(function()
 NoSlowdown = vape.Categories.Blatant:CreateModule({
 	Name = 'NoSlowdown',
 	Function = function(callback)
@@ -16,3 +16,4 @@ NoSlowdown = vape.Categories.Blatant:CreateModule({
 	end,
 	Tooltip = 'Prevent you from slowing down when using items.'
 })
+end)

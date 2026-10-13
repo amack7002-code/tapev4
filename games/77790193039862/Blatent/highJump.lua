@@ -2,6 +2,7 @@ local HighJump
 local Value
 local AutoDisable
 
+run(function()
 local function jump()
 	local onground = debug.getupvalue(arena.MoveFunction, 4)
 	if onground then
@@ -41,3 +42,4 @@ AutoDisable = HighJump:CreateToggle({
 	Name = 'Auto Disable',
 	Default = true
 })
+end)
