@@ -79,7 +79,7 @@ local setupOK, setupError = run(function()
 			end
 		end
 		task.wait(0.1)
-	until env and fallback ~= env.startHit or tick() >= deadline or not active
+	until env and fallback == env.startHit or tick() >= deadline or not active
 	assert(active and env and env.startHit and type(env.startHit) == 'function', 'CharacterController did not expose the startHit callback within 20 seconds')
 
 	arena = {
@@ -87,18 +87,15 @@ local setupOK, setupError = run(function()
 		PlayerState = require(child(charscript, 'PlayerState')),
 		Inventory = require(child(charscript, 'Inventory')),
 		MoveController = require(child(scripts, 'PlayerModule')):GetControls(),
+		Fly = {Enabled = false},
+		LongJump = {Enabled = false},
 		SwingFunction = readUpvalue(env.startHit, 1)
-	}
-
-	local flySetupOK, flySetupError = run(function()
+	}	local flySetupOK, flySetupError = run(function()
 		local scripts = child(lplr, 'PlayerScripts')
 		local flyModule = child(scripts, 'Fly')
 		arena.Fly = require(flyModule)
 		arena.Fly.Enabled = true
 		arena.Fly.PhaseLocked = false
-	end)
-	local longJumpSetupOK, longJumpSetupError = run(function()
-		local scripts = child(lplr, 'PlayerScripts')
 		local longJumpModule = child(scripts, 'LongJump')
 		arena.LongJump = require(longJumpModule)
 		arena.LongJump.Enabled = true
@@ -129,7 +126,6 @@ end)
 if not setupOK then error('[tapev4/Arena] '..tostring(setupError), 0) end
 
 
-
 run(function()
 
 	local function waitForChildOfType(obj, name, timeout, prop)
@@ -151,4 +147,5 @@ run(function()
 		return returned
 
 	end
+end)
 
