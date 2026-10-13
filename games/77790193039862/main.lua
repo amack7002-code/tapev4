@@ -349,16 +349,15 @@ run(function()
 		Function = function(callback)
 			if callback then
 				oldhit = hookfunction(arena.Client.startHit, function(...)
-					if debug.getupvalue(oldhit, 6) then
+					if readUpvalue(oldhit, 6) == true then
 						arena.Client.endBlockEvent:FireServer()
 						debug.setupvalue(oldhit, 6, false)
 						local results = table.pack(oldhit(...))
 						arena.Client.beginBlockEvent:FireServer()
 						debug.setupvalue(oldhit, 6, true)
 						return unpack(results, 1, results.n)
-					else
-						return oldhit(...)
 					end
+					return oldhit(...)
 				end)
 			else
 				if oldhit then
