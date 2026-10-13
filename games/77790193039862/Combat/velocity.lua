@@ -10,7 +10,7 @@ run(function()
 local function velocityFunction(...)
 	if rand:NextNumber(0, 100) > Chance.Value then return old(...) end
 
-    local data = ...
+	local data = ...
 	local check = (not Targeting.Enabled) or entitylib.EntityPosition({
 		Range = 50,
 		Part = 'RootPart',
