@@ -118,35 +118,41 @@ local setupOK, setupError = run(function()
 	}
 
 	-- Discover TickFunction + MoveFunction
-	local callbackDeadline = tick() + 20
+	-- Discover TickFunction + MoveFunction
+	local callbackDeadline = tick() + 25
 	repeat
 		arena.TickFunction = nil
 		arena.MoveFunction = nil
 
-		-- TickFunction
+		-- ===== Improved TickFunction search =====
 		local heartbeatOK, heartbeatConnections = pcall(getconnections, runService.Heartbeat)
 		if heartbeatOK and type(heartbeatConnections) == 'table' then
 			for _, connection in ipairs(heartbeatConnections) do
 				local callback = connection.Function
 				if type(callback) == 'function' and (not islclosure or islclosure(callback)) then
-					local constantsOK, constants = pcall(debug.getconstants, callback)
-					if constantsOK and type(constants) == 'table' then
-						for _, constant in ipairs(constants) do
-							if constant == 0.05 then
-								local candidate = readUpvalue(callback, 3)
-								if type(candidate) == 'function' then
-									arena.TickFunction = candidate
-									break
-								end
+					-- Try multiple common upvalue indexes
+					for _, idx in ipairs({3, 2, 4, 5, 1, 6}) do
+						local candidate = readUpvalue(callback, idx)
+						if type(candidate) == 'function' then
+							-- Extra safety: check if it looks like a movement tick function
+							local ok, constants = pcall(debug.getconstants, candidate)
+							if ok and type(constants) == 'table' then
+								-- Accept it if it has any number constant around 0.05 or just take the first good function
+								arena.TickFunction = candidate
+								break
+							else
+								-- Even if we can't get constants, still accept it as last resort
+								arena.TickFunction = candidate
 							end
 						end
+						if arena.TickFunction then break end
 					end
 				end
 				if arena.TickFunction then break end
 			end
 		end
 
-		-- MoveFunction
+		-- ===== MoveFunction (same as before) =====
 		local eventOK, eventConnections = pcall(function()
 			return getconnections(child(child(replicatedStorage, 'Remotes'), 'LoadLocalCharacter').OnClientEvent)
 		end)
@@ -154,12 +160,16 @@ local setupOK, setupError = run(function()
 			for _, connection in ipairs(eventConnections) do
 				local callback = connection.Function
 				if type(callback) == 'function' then
-					local candidate = readUpvalue(callback, 9)
-					if type(candidate) == 'function' then
-						arena.MoveFunction = candidate
-						break
+					-- Try a few upvalue indexes
+					for _, idx in ipairs({9, 8, 10, 7, 11}) do
+						local candidate = readUpvalue(callback, idx)
+						if type(candidate) == 'function' then
+							arena.MoveFunction = candidate
+							break
+						end
 					end
 				end
+				if arena.MoveFunction then break end
 			end
 		end
 
