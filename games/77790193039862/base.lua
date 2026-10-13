@@ -1,4 +1,4 @@
--- tapev4 arena setup (fixed)
+-- tapev4 arena setup
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 local run = function(func)
@@ -57,26 +57,28 @@ local function calculateMoveVector()
 end
 
 local setupOK, setupError = run(function()
-	assert(type(getsenv) == 'function' and type(getconnections) == 'function', 'Executor requires getsenv and getconnections')
-	assert(debug and type(debug.getupvalue) == 'function' and type(debug.setupvalue) == 'function', 'Executor requires debug upvalue APIs')
+	assert(type(getsenv) == 'function' and type(getconnections) == 'function',
+		'Executor requires getsenv and getconnections')
+	assert(debug and type(debug.getupvalue) == 'function' and
+		type(debug.setupvalue) == 'function' and type(debug.getconstants) == 'function',
+		'Executor requires debug upvalue / constants APIs')
 
 	local scripts = child(lplr, 'PlayerScripts')
 	local charscript = child(scripts, 'CharacterController')
 
-	-- Improved startHit detection
+	-- Wait for the CharacterController executors to expose a usable startHit.
 	local env, startHitFunc
-	local deadline = tick() + 25
+	local deadline = tick() + 20
 
 	repeat
 		local ok, result = pcall(getsenv, charscript)
 		if ok and type(result) == 'table' then
 			env = result
 
-			-- Try multiple ways to find startHit
+			-- Sometimes it lives in an upvalue.
 			if type(env.startHit) == 'function' then
 				startHitFunc = env.startHit
 			else
-				-- Sometimes it's stored in an upvalue
 				for i = 1, 20 do
 					local uv = readUpvalue(env.startHit or function() end, i)
 					if type(uv) == 'function' then
