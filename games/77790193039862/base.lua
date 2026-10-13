@@ -1,24 +1,24 @@
--- tapev4 arena setup.
+-- tapev4 arena setup (fixed)
 if not game:IsLoaded() then game.Loaded:Wait() end
+
 local run = function(func)
 	local ok, result = xpcall(func, debug and debug.traceback or tostring)
-	if not ok then warn('[tapev4/Arena] Startup failed: '..tostring(result)) end
+	if not ok then
+		warn('[tapev4/Arena] Startup failed: '..tostring(result))
+	end
 	return ok, result
 end
-local cloneref = cloneref or function(obj)
-	return obj
-end
+
+local cloneref = cloneref or function(obj) return obj end
 
 local playersService = cloneref(game:GetService('Players'))
 local inputService = cloneref(game:GetService('UserInputService'))
 local replicatedStorage = cloneref(game:GetService('ReplicatedStorage'))
-local replicatedFirst = cloneref(game:GetService('ReplicatedFirst'))
-local collectionService = cloneref(game:GetService('CollectionService'))
 local runService = cloneref(game:GetService('RunService'))
-local coreGui = cloneref(game:GetService('CoreGui'))
 
 local gameCamera = workspace.CurrentCamera or workspace:WaitForChild('Camera', 20)
 assert(gameCamera, 'Arena camera did not become available')
+
 local lplr = playersService.LocalPlayer
 local vape = shared.vape
 local entitylib = vape.Libraries.entity
@@ -35,10 +35,8 @@ local function child(parent, name)
 end
 
 local function readUpvalue(callback, index)
-	local results = table.pack(pcall(debug.getupvalue, callback, index))
-	if not results[1] then return nil end
-	if results.n >= 3 then return results[3] end
-	return results[2]
+	local ok, val = pcall(debug.getupvalue, callback, index)
+	return ok and val or nil
 end
 
 local function calculateMoveVector()
@@ -58,29 +56,45 @@ local function calculateMoveVector()
 	return vec.Unit == vec.Unit and vec.Unit or Vector3.zero
 end
 
-local function notif(...)
-	return vape:CreateNotification(...)
-end
-
 local setupOK, setupError = run(function()
 	assert(type(getsenv) == 'function' and type(getconnections) == 'function', 'Executor requires getsenv and getconnections')
-	assert(debug and type(debug.getupvalue) == 'function' and type(debug.setupvalue) == 'function' and type(debug.getconstants) == 'function', 'Executor requires debug upvalue/constants APIs')
+	assert(debug and type(debug.getupvalue) == 'function' and type(debug.setupvalue) == 'function', 'Executor requires debug upvalue APIs')
+
 	local scripts = child(lplr, 'PlayerScripts')
 	local charscript = child(scripts, 'CharacterController')
-	local deadline = tick() + 20
-	local ok, env = pcall(getsenv, charscript)
-	if not ok then env = nil end
-	local fallback
+
+	-- Improved startHit detection
+	local env, startHitFunc
+	local deadline = tick() + 25
+
 	repeat
-		if env and env.startHit then
-			fallback = readUpvalue(env.startHit, 1) or env.startHit
-			if fallback ~= env.startHit then
-				env.startHit = fallback
+		local ok, result = pcall(getsenv, charscript)
+		if ok and type(result) == 'table' then
+			env = result
+
+			-- Try multiple ways to find startHit
+			if type(env.startHit) == 'function' then
+				startHitFunc = env.startHit
+			else
+				-- Sometimes it's stored in an upvalue
+				for i = 1, 20 do
+					local uv = readUpvalue(env.startHit or function() end, i)
+					if type(uv) == 'function' then
+						startHitFunc = uv
+						break
+					end
+				end
 			end
 		end
-		task.wait(0.1)
-	until env and fallback == env.startHit or tick() >= deadline or not active
-	assert(active and env and env.startHit and type(env.startHit) == 'function', 'CharacterController did not expose the startHit callback within 20 seconds')
+
+		if startHitFunc then break end
+		task.wait(0.15)
+	until tick() >= deadline or not active
+
+	assert(active and startHitFunc, 'startHit callback unavailable')
+
+	-- Get the real swing function (usually upvalue 1)
+	local swingFunc = readUpvalue(startHitFunc, 1) or startHitFunc
 
 	arena = {
 		Client = env,
@@ -89,63 +103,54 @@ local setupOK, setupError = run(function()
 		MoveController = require(child(scripts, 'PlayerModule')):GetControls(),
 		Fly = {Enabled = false},
 		LongJump = {Enabled = false},
-		SwingFunction = readUpvalue(env.startHit, 1)
-	}	local flySetupOK, flySetupError = run(function()
-		local scripts = child(lplr, 'PlayerScripts')
+		SwingFunction = swingFunc,
+		startHit = startHitFunc
+	}
+
+	-- Fly + LongJump setup (fixed variable names)
+	local flySetupOK = run(function()
 		local flyModule = child(scripts, 'Fly')
 		arena.Fly = require(flyModule)
 		arena.Fly.Enabled = true
 		arena.Fly.PhaseLocked = false
+
 		local longJumpModule = child(scripts, 'LongJump')
 		arena.LongJump = require(longJumpModule)
 		arena.LongJump.Enabled = true
 		arena.LongJump.AutoActivate = false
 	end)
-	assert(flySetupOK and longJumpSetupOK, 'Arena controller setup failed: Fly='..tostring(flySetupOK)..' LongJump='..tostring(longJumpSetupOK))
+	assert(flySetupOK, 'Arena controller setup failed (Fly/LongJump)')
 
+	-- Find TickFunction
 	for _, v in getconnections(runService.Heartbeat) do
 		if type(v.Function) == 'function' and (not islclosure or islclosure(v.Function)) then
 			local success, constants = pcall(debug.getconstants, v.Function)
 			if success and type(constants) == 'table' and constants[1] == 0.05 then
 				local value = readUpvalue(v.Function, 3)
-				if type(value) == 'function' then arena.TickFunction = value end
+				if type(value) == 'function' then
+					arena.TickFunction = value
+				end
 			end
 		end
 	end
 
-	for _, v in getconnections(child(child(replicatedStorage, 'Remotes'), 'LoadLocalCharacter').OnClientEvent) do
+	-- Find MoveFunction
+	local loadRemote = child(child(replicatedStorage, 'Remotes'), 'LoadLocalCharacter')
+	for _, v in getconnections(loadRemote.OnClientEvent) do
 		if v.Function then
 			local value = readUpvalue(v.Function, 9)
-			if type(value) == 'function' then arena.MoveFunction = value end
+			if type(value) == 'function' then
+				arena.MoveFunction = value
+			end
 		end
 	end
 
-	assert(type(arena.SwingFunction) == 'function' and arena.TickFunction and arena.MoveFunction, 'Arena controller callbacks unavailable; wait for the game to load or check executor support')
+	assert(type(arena.SwingFunction) == 'function' and arena.TickFunction and arena.MoveFunction,
+		'Arena controller callbacks unavailable; wait for the game to fully load')
+
 	child(workspace, 'OtherCharacters')
 end)
-if not setupOK then error('[tapev4/Arena] '..tostring(setupError), 0) end
 
-
-run(function()
-
-	local function waitForChildOfType(obj, name, timeout, prop)
-
-		local checktick = tick() + timeout
-
-		local returned
-
-		repeat
-
-			returned = prop and obj[name] or obj:FindFirstChildOfClass(name)
-
-			if returned or checktick < tick() then break end
-
-			task.wait()
-
-		until false
-
-		return returned
-
-	end
-end)
-
+if not setupOK then
+	error('[tapev4/Arena] '..tostring(setupError), 0)
+end
