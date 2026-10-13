@@ -330,6 +330,7 @@ run(function()
 		end
 	end
 	entitylib.start()
+end)
 
 -- Remove default modules
 for _, v in {'AutoClicker', 'Killaura', 'Fly', 'Speed', 'Spider', 'Sprint', 'Velocity', 'HighJump', 'LongJump', 'HitBoxes', 'NoSlow', 'FastBreak', 'FastPlace', 'AutoBlock', 'AimAssist', 'Reach', 'SilentAim', 'AntiFall', 'Desync', 'Invisible', 'Jesus', 'MouseTP', 'Phase', 'SpinBot', 'Swim', 'TargetStrafe', 'AnimationPlayer', 'AntiRagdoll', 'ChatSpammer', 'Disabler', 'HumSpoofer', 'Freecam', 'Gravity', 'Parkour', 'SafeWalk', 'MurderMystery'} do
