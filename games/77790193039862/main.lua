@@ -31,6 +31,8 @@ local entitylib = vape.Libraries.entity
 local targetinfo = vape.Libraries.targetinfo
 local arena = {}
 local oldhit
+local Fly
+local LongJump
 local Spider = {Enabled = false}
 local Phase = {Enabled = false}
 local SpiderShift = false
@@ -49,11 +51,12 @@ end
 -- Fixed readUpvalue
 local function readUpvalue(callback, index)
 	if type(callback) ~= 'function' then return nil end
-	local ok, name, value = pcall(debug.getupvalue, callback, index)
-	if ok then
-		return value
-	end
-	return nil
+	local ok, first, second = pcall(debug.getupvalue, callback, index)
+	if not ok then return nil end
+	-- Standard Lua returns (name, value); Luau executors commonly return only value.
+	if second ~= nil then return second end
+	if type(first) == 'string' then return nil end
+	return first
 end
 
 local function calculateMoveVector()
@@ -369,8 +372,6 @@ run(function()
 end)
 
 run(function()
-	local Fly
-	local LongJump
 	run(function()
 		local Keys
 		local Value
@@ -489,10 +490,12 @@ run(function()
 							if not Targets.Players.Enabled and v.Player then continue end
 							if not Targets.NPCs.Enabled and v.NPC then continue end
 							local part = v.Hitbox
-							if not modified[part] then
-								modified[part] = part.Size
+							if part and part:IsA('BasePart') then
+								if not modified[part] then
+									modified[part] = part.Size
+								end
+								part.Size = modified[part] + Vector3.new(Expand.Value, Expand.Value, Expand.Value)
 							end
-							part.Size = modified[part] + Vector3.new(Expand.Value, Expand.Value, Expand.Value)
 						end
 					end
 					task.wait()
@@ -1039,37 +1042,43 @@ run(function()
 	local AutoClicker
 	local CPS
 	local Thread
-	local function AutoClick()
+	local mouseDown = false
+	local function stopClicking()
+		mouseDown = false
 		if Thread then
 			task.cancel(Thread)
+			Thread = nil
 		end
-		Thread = task.delay(1 / CPS.GetRandomValue(), function()
-			repeat
+	end
+	local function AutoClick()
+		if Thread then return end
+		Thread = task.spawn(function()
+			task.wait(1 / CPS.GetRandomValue())
+			while AutoClicker.Enabled and mouseDown do
 				task.spawn(arena.Client.startHit)
 				task.wait(1 / CPS.GetRandomValue())
-			until not AutoClicker.Enabled
+			end
+			Thread = nil
 		end)
 	end
 	AutoClicker = vape.Categories.Combat:CreateModule({
 		Name = 'AutoClicker',
 		Function = function(callback)
 			if callback then
-				AutoClicker:Clean(inputService.InputBegan:Connect(function(input)
-					if input.UserInputType == Enum.UserInputType.MouseButton1 then
+				mouseDown = false
+				AutoClicker:Clean(inputService.InputBegan:Connect(function(input, gameProcessed)
+					if not gameProcessed and input.UserInputType == Enum.UserInputType.MouseButton1 then
+						mouseDown = true
 						AutoClick()
 					end
 				end))
 				AutoClicker:Clean(inputService.InputEnded:Connect(function(input)
-					if input.UserInputType == Enum.UserInputType.MouseButton1 and Thread then
-						task.cancel(Thread)
-						Thread = nil
+					if input.UserInputType == Enum.UserInputType.MouseButton1 then
+						stopClicking()
 					end
 				end))
 			else
-				if Thread then
-					task.cancel(Thread)
-					Thread = nil
-				end
+				stopClicking()
 			end
 		end,
 		Tooltip = 'Hold attack button to automatically click'
