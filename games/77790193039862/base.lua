@@ -71,14 +71,19 @@ local setupOK, setupError = run(function()
 	local deadline = tick() + 20
 	local ok, env = pcall(getsenv, charscript)
 	if not ok then env = nil end
-	if not (env and env.startHit) then
-		repeat
-			local success, value = pcall(getsenv, charscript)
-			env = success and value or nil
-			task.wait(0.1)
-		until env and env.startHit or tick() >= deadline or not active
-		assert(active and env and type(env.startHit) == 'function', 'CharacterController was not ready within 20 seconds')
-	end
+	repeat
+		local success, value = pcall(getsenv, charscript)
+		env = success and value or nil
+		if env and env.startHit then
+			local live = readUpvalue(env.startHit, 1)
+			if live == env.startHit then
+				break
+			end
+			env.startHit = live
+		end
+		task.wait(0.1)
+	until tick() >= deadline or not active
+	assert(active and env and env.startHit and type(env.startHit) == 'function', 'CharacterController did not expose the startHit callback within 20 seconds')
 
 	arena = {
 		Client = env,
