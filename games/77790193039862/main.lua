@@ -117,42 +117,32 @@ local setupOK, setupError = run(function()
 		SwingFunction = swingFunc
 	}
 
-	-- Discover TickFunction + MoveFunction
-	-- Discover TickFunction + MoveFunction
-	local callbackDeadline = tick() + 25
+	-- Discover TickFunction + MoveFunction (more aggressive + non-fatal)
+	local callbackDeadline = tick() + 20
 	repeat
 		arena.TickFunction = nil
 		arena.MoveFunction = nil
 
-		-- ===== Improved TickFunction search =====
+		-- ===== TickFunction search =====
 		local heartbeatOK, heartbeatConnections = pcall(getconnections, runService.Heartbeat)
 		if heartbeatOK and type(heartbeatConnections) == 'table' then
 			for _, connection in ipairs(heartbeatConnections) do
 				local callback = connection.Function
 				if type(callback) == 'function' and (not islclosure or islclosure(callback)) then
-					-- Try multiple common upvalue indexes
-					for _, idx in ipairs({3, 2, 4, 5, 1, 6}) do
+					-- Try many upvalue indexes
+					for idx = 1, 12 do
 						local candidate = readUpvalue(callback, idx)
 						if type(candidate) == 'function' then
-							-- Extra safety: check if it looks like a movement tick function
-							local ok, constants = pcall(debug.getconstants, candidate)
-							if ok and type(constants) == 'table' then
-								-- Accept it if it has any number constant around 0.05 or just take the first good function
-								arena.TickFunction = candidate
-								break
-							else
-								-- Even if we can't get constants, still accept it as last resort
-								arena.TickFunction = candidate
-							end
+							arena.TickFunction = candidate
+							break
 						end
-						if arena.TickFunction then break end
 					end
 				end
 				if arena.TickFunction then break end
 			end
 		end
 
-		-- ===== MoveFunction (same as before) =====
+		-- ===== MoveFunction search =====
 		local eventOK, eventConnections = pcall(function()
 			return getconnections(child(child(replicatedStorage, 'Remotes'), 'LoadLocalCharacter').OnClientEvent)
 		end)
@@ -160,8 +150,7 @@ local setupOK, setupError = run(function()
 			for _, connection in ipairs(eventConnections) do
 				local callback = connection.Function
 				if type(callback) == 'function' then
-					-- Try a few upvalue indexes
-					for _, idx in ipairs({9, 8, 10, 7, 11}) do
+					for idx = 1, 15 do
 						local candidate = readUpvalue(callback, idx)
 						if type(candidate) == 'function' then
 							arena.MoveFunction = candidate
@@ -176,12 +165,23 @@ local setupOK, setupError = run(function()
 		if type(arena.TickFunction) == 'function' and type(arena.MoveFunction) == 'function' then
 			break
 		end
-		task.wait(0.25)
+		task.wait(0.3)
 	until tick() >= callbackDeadline or not active
 
-	assert(type(arena.SwingFunction) == 'function', 'Arena setup failed: startHit callback unavailable')
-	assert(type(arena.TickFunction) == 'function', 'Arena setup failed: tick callback not found')
-	assert(type(arena.MoveFunction) == 'function', 'Arena setup failed: movement callback not found')
+	-- Make them non-fatal
+	if type(arena.SwingFunction) ~= 'function' then
+		error('Arena setup failed: startHit callback unavailable', 0)
+	end
+
+	if type(arena.TickFunction) ~= 'function' then
+		warn('[tapev4/Arena] TickFunction not found — Fly / Speed / HighJump / LongJump / Spider will not work')
+		arena.TickFunction = function() end -- dummy so the rest of the script doesn't crash
+	end
+
+	if type(arena.MoveFunction) ~= 'function' then
+		warn('[tapev4/Arena] MoveFunction not found — some movement features will not work')
+		arena.MoveFunction = function() end
+	end
 
 	child(workspace, 'OtherCharacters')
 end)
