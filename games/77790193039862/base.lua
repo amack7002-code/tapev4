@@ -90,8 +90,23 @@ local setupOK, setupError = run(function()
 		PlayerState = require(child(charscript, 'PlayerState')),
 		Inventory = require(child(charscript, 'Inventory')),
 		MoveController = require(child(scripts, 'PlayerModule')):GetControls(),
-		SwingFunction = readUpvalue(env.startHit, 1)
+			SwingFunction = readUpvalue(env.startHit, 1)
 	}
+	local flySetupOK, flySetupError = run(function()
+		local scripts = child(lplr, 'PlayerScripts')
+		local flyModule = child(scripts, 'Fly')
+		arena.Fly = require(flyModule)
+		arena.Fly.Enabled = true
+		arena.Fly.PhaseLocked = false
+	end)
+	local longJumpSetupOK, longJumpSetupError = run(function()
+		local scripts = child(lplr, 'PlayerScripts')
+		local longJumpModule = child(scripts, 'LongJump')
+		arena.LongJump = require(longJumpModule)
+		arena.LongJump.Enabled = true
+		arena.LongJump.AutoActivate = false
+	end)
+	assert(flySetupOK and longJumpSetupOK, 'Arena controller setup failed: Fly='..tostring(flySetupOK)..' LongJump='..tostring(longJumpSetupOK))
 
 	for _, v in getconnections(runService.Heartbeat) do
 		if type(v.Function) == 'function' and (not islclosure or islclosure(v.Function)) then
