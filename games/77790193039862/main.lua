@@ -1265,4 +1265,4 @@ run(function()
 			return 'seconds'
 		end
 	})
-end)
+end)  -- ← this end) is very important
