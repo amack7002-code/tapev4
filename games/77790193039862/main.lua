@@ -2,13 +2,13 @@
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 local run = function(func)
-    local ok, result = xpcall(func, debug and debug.traceback or tostring)
-    if not ok then warn('[tapev4/Arena] Startup failed: ' .. tostring(result)) end
-    return ok, result
+	local ok, result = xpcall(func, debug and debug.traceback or tostring)
+	if not ok then warn('[tapev4/Arena] Startup failed: ' .. tostring(result)) end
+	return ok, result
 end
 
 local cloneref = cloneref or function(obj)
-    return obj
+	return obj
 end
 local playersService = cloneref(game:GetService('Players'))
 local inputService = cloneref(game:GetService('UserInputService'))
