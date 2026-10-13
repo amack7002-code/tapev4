@@ -283,7 +283,9 @@ run(function()
 		if entitylib.Running then
 			local cameraConnection
 			local function bindCamera()
-				if cameraConnection then cameraConnection:Disconnect() end
+				if cameraConnection then
+					cameraConnection:Disconnect()
+				end
 				gameCamera = workspace.CurrentCamera
 				if gameCamera then
 					cameraConnection = gameCamera:GetPropertyChangedSignal('CameraSubject'):Connect(function()
@@ -293,27 +295,41 @@ run(function()
 				end
 				entitylib.addEntity(true, lplr)
 			end
+
 			table.insert(entitylib.Connections, workspace:GetPropertyChangedSignal('CurrentCamera'):Connect(bindCamera))
 			bindCamera()
-			table.insert(entitylib.Connections, workspace.OtherCharacters.ChildAdded:Connect(function(ent)
-				local plr = playersService:FindFirstChild(ent.Name:sub(1, #ent.Name - 14))
-				if plr then
-					entitylib.refreshEntity(ent, plr)
-				end
-			end))
-			table.insert(entitylib.Connections, workspace.OtherCharacters.ChildRemoved:Connect(function(ent)
-				entitylib.removeEntity(ent)
-			end))
-			for _, ent in workspace.OtherCharacters:GetChildren() do
-				local plr = playersService:FindFirstChild(ent.Name:sub(1, #ent.Name - 14))
-				if plr then
-					entitylib.refreshEntity(ent, plr)
+
+			local otherChars = workspace:FindFirstChild("OtherCharacters")
+			if otherChars then
+				table.insert(entitylib.Connections, otherChars.ChildAdded:Connect(function(ent)
+					local plr = playersService:FindFirstChild(ent.Name:sub(1, #ent.Name - 14))
+					if plr then
+						if entitylib.refreshEntity then
+							entitylib.refreshEntity(ent, plr)
+						else
+							entitylib.addEntity(ent, plr)
+						end
+					end
+				end))
+
+				table.insert(entitylib.Connections, otherChars.ChildRemoved:Connect(function(ent)
+					entitylib.removeEntity(ent)
+				end))
+
+				for _, ent in otherChars:GetChildren() do
+					local plr = playersService:FindFirstChild(ent.Name:sub(1, #ent.Name - 14))
+					if plr then
+						if entitylib.refreshEntity then
+							entitylib.refreshEntity(ent, plr)
+						else
+							entitylib.addEntity(ent, plr)
+						end
+					end
 				end
 			end
 		end
 	end
 	entitylib.start()
-end)
 
 -- Remove default modules
 for _, v in {'AutoClicker', 'Killaura', 'Fly', 'Speed', 'Spider', 'Sprint', 'Velocity', 'HighJump', 'LongJump', 'HitBoxes', 'NoSlow', 'FastBreak', 'FastPlace', 'AutoBlock', 'AimAssist', 'Reach', 'SilentAim', 'AntiFall', 'Desync', 'Invisible', 'Jesus', 'MouseTP', 'Phase', 'SpinBot', 'Swim', 'TargetStrafe', 'AnimationPlayer', 'AntiRagdoll', 'ChatSpammer', 'Disabler', 'HumSpoofer', 'Freecam', 'Gravity', 'Parkour', 'SafeWalk', 'MurderMystery'} do
