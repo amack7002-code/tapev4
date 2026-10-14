@@ -8552,7 +8552,7 @@ local function getAutoScale()
 	local size = gui.AbsoluteSize
 	if size.X <= 0 or size.Y <= 0 then return 1 end
 	if inputService.TouchEnabled and not inputService.KeyboardEnabled then
-		return math.clamp(math.min(size.X / 430, size.Y / 780), 0.75, 1)
+		return math.clamp(size.Y / 665, 0.55, 1)
 	end
 	return math.clamp(math.min(size.X / 1600, size.Y / 900), 0.7, 1)
 end
@@ -11179,3 +11179,4 @@ mainapi:Clean(inputService.InputEnded:Connect(function(inputObj)
 end))
 
 return mainapi
+
