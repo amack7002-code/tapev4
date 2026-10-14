@@ -4,7 +4,7 @@ if shared.vape then shared.vape:Uninject() end
 local LOADER_URL = "https://raw.githubusercontent.com/wrealaero/aerov4/main/downloader.lua" 
 local _initArgs = ...
 if type(_initArgs) ~= "table" then _initArgs = {} end
-shared.aerov4User = "my cutie <3"
+shared.aerov4User = "spookers 👻"
 
 if identifyexecutor then
 	if table.find({'Wave', 'Seliware', 'Volt'}, ({identifyexecutor()})[1]) then
@@ -25,7 +25,7 @@ local vape
 local loadstring = function(...)
 	local res, err = loadstring(...)
 	if err and vape then
-		vape:CreateNotification('aerov4', 'Failed to load : '..err, 30, 'alert')
+		vape:CreateNotification('Vape', 'Failed to load : '..err, 30, 'alert')
 	end
 	return res
 end
