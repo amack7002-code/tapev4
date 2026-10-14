@@ -1,5 +1,6 @@
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 --This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local mainapi = {
 	Categories = {},
 	GUIColor = {
@@ -124,7 +125,9 @@ local getcustomassets = {
 	['aerov4/assets/new/utilityicon.png'] = 'rbxassetid://14368359107',
 	['aerov4/assets/new/vape.png'] = 'rbxassetid://14373395239',
 	['aerov4/assets/new/warning.png'] = 'rbxassetid://14368361552',
-	['aerov4/assets/new/worldicon.png'] = 'rbxassetid://14368362492'
+	['aerov4/assets/new/worldicon.png'] = 'rbxassetid://14368362492',
+	['aerov4/assets/new/eyeopen.png'] = 'rbxassetid://85547987939285',
+	['aerov4/assets/new/eyeclosed.png'] = 'rbxassetid://129675456133478'
 }
 
 local isfile = isfile or function(file)
@@ -1465,7 +1468,7 @@ getcustomasset = function(path)
 	local cached = customassetcache[path]
 	if cached then return cached end
 	local result = ''
-	if not inputService.TouchEnabled and assetfunction then
+	if assetfunction and (not inputService.TouchEnabled or path == 'aerov4/assets/new/eyeopen.png' or path == 'aerov4/assets/new/eyeclosed.png') then
 		if isfile(path) or customAssets[path] then
 			local ok, res = pcall(downloadFile, path, assetfunction)
 			if ok and res and res ~= '' then result = res end
@@ -1475,7 +1478,7 @@ getcustomasset = function(path)
 		local id = getcustomassets[path]
 		if id and id ~= '' then
 			result = id
-		elseif not inputService.TouchEnabled and assetfunction then
+		elseif not inputService.TouchEnabled and assetfunction and not path:find('eyeopen.png', 1, true) and not path:find('eyeclosed.png', 1, true) then
 			local ok, res = pcall(downloadFile, path, assetfunction)
 			if ok and res then result = res end
 		end
@@ -1508,14 +1511,11 @@ end
 local draggableids = {}
 
 local function removeDraggable(gui)
-    if remove then
-        if draggableids[gui] then
-            draggableids[gui]:Disconnect()
-            draggableids[gui] = nil
-        end
-        return
-    end
-
+	local connection = draggableids[gui]
+	if connection then
+		connection:Disconnect()
+		draggableids[gui] = nil
+	end
 end
 
 local function isDraggable(gui)
@@ -2110,7 +2110,11 @@ components = {
 			valuebox.Visible = true
 			valuebox:CaptureFocus()
 			local text = Color3.fromHSV(optionapi.Hue, optionapi.Sat, optionapi.Value)
-			valuebox.Text = math.round(text.R * 255)..', '..math.round(text.G * 255)..', '..math.round(text.B * 255)
+			if mainapi.ColorPickerMode and mainapi.ColorPickerMode.Value == 'Custom' then
+				valuebox.Text = '#'..text:ToHex():upper()
+			else
+				valuebox.Text = math.round(text.R * 255)..', '..math.round(text.G * 255)..', '..math.round(text.B * 255)
+			end
 		end)
 		slider.InputBegan:Connect(function(inputObj)
 			if
@@ -2151,6 +2155,9 @@ components = {
 			})
 		end)
 		slider:GetPropertyChangedSignal('Visible'):Connect(function()
+			if mainapi.ColorPickerMode and mainapi.ColorPickerMode.Value == 'Custom' then
+				expand.Rotation = 180
+			end
 			satSlider.Visible = expand.Rotation == 180 and slider.Visible
 			vibSlider.Visible = satSlider.Visible
 			opSlider.Visible = satSlider.Visible
@@ -3813,6 +3820,99 @@ end
 
 addMaid(mainapi)
 
+local halloweenWebs = {}
+local halloweenIcons = setmetatable({}, {__mode = 'k'})
+local function addWeb(window)
+	local web = Instance.new('Frame')
+	web.Name = 'HalloweenWeb'
+	web.Size = UDim2.fromOffset(40, 40)
+	web.AnchorPoint = Vector2.new(1, 1)
+	web.Position = UDim2.new(1, -2, 1, -2)
+	web.BackgroundTransparency = 1
+	web.ZIndex = 8
+	web.Parent = window
+	local corner = Vector2.new(40, 40)
+	local function line(a, b)
+		local d = b - a
+		local seg = Instance.new('Frame')
+		seg.AnchorPoint = Vector2.new(0.5, 0.5)
+		seg.Position = UDim2.fromOffset((a.X + b.X) / 2, (a.Y + b.Y) / 2)
+		seg.Size = UDim2.fromOffset(d.Magnitude, 1)
+		seg.Rotation = math.deg(math.atan2(d.Y, d.X))
+		seg.BackgroundColor3 = Color3.fromRGB(235, 235, 235)
+		seg.BackgroundTransparency = 0.5
+		seg.BorderSizePixel = 0
+		seg.ZIndex = 8
+		seg.Parent = web
+	end
+	local angles = {4, 26, 48, 68, 86}
+	local function point(deg, r)
+		local rad = math.rad(deg)
+		return corner - Vector2.new(math.cos(rad) * r, math.sin(rad) * r)
+	end
+	for _, deg in angles do
+		line(corner, point(deg, 36))
+	end
+	for _, r in {14, 27} do
+		for k = 1, #angles - 1 do
+			local a, b = point(angles[k], r), point(angles[k + 1], r)
+			local mid = (a + b) / 2
+			local sag = (corner - mid).Unit * 2.5
+			line(a, mid + sag)
+			line(mid + sag, b)
+		end
+	end
+	local thread = Instance.new('Frame')
+	thread.AnchorPoint = Vector2.new(0.5, 0)
+	thread.Position = UDim2.fromOffset(24, 14)
+	thread.Size = UDim2.fromOffset(1, 20)
+	thread.BackgroundColor3 = Color3.fromRGB(235, 235, 235)
+	thread.BackgroundTransparency = 0.55
+	thread.BorderSizePixel = 0
+	thread.ZIndex = 8
+	thread.Parent = web
+	local spider = Instance.new('Frame')
+	spider.AnchorPoint = Vector2.new(0.5, 0)
+	spider.Position = UDim2.new(0.5, 0, 1, -1)
+	spider.Size = UDim2.fromOffset(6, 6)
+	spider.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+	spider.BorderSizePixel = 0
+	spider.ZIndex = 9
+	spider.Parent = thread
+	local spiderCorner = Instance.new('UICorner')
+	spiderCorner.CornerRadius = UDim.new(1, 0)
+	spiderCorner.Parent = spider
+	local spiderStroke = Instance.new('UIStroke')
+	spiderStroke.Color = Color3.fromRGB(255, 140, 40)
+	spiderStroke.Thickness = 1
+	spiderStroke.Transparency = 0.2
+	spiderStroke.Parent = spider
+	for side = -1, 1, 2 do
+		for k = 0, 2 do
+			local leg = Instance.new('Frame')
+			leg.AnchorPoint = Vector2.new(side > 0 and 0 or 1, 0.5)
+			leg.Position = UDim2.new(side > 0 and 1 or 0, 0, 0, 1 + k * 2)
+			leg.Size = UDim2.fromOffset(3, 1)
+			leg.Rotation = side * (k - 1) * 25
+			leg.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+			leg.BorderSizePixel = 0
+			leg.ZIndex = 9
+			leg.Parent = spider
+		end
+	end
+	pcall(function()
+		tweenService:Create(thread, TweenInfo.new(1.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Size = UDim2.fromOffset(1, 5)}):Play()
+	end)
+	local function updateWeb()
+		local themeOn = not mainapi.HalloweenTheme or mainapi.HalloweenTheme.Enabled
+		web.Visible = themeOn and window.AbsoluteSize.Y / math.max(scale and scale.Scale or 1, 0.01) > 80
+	end
+	window:GetPropertyChangedSignal('AbsoluteSize'):Connect(updateWeb)
+	updateWeb()
+	table.insert(halloweenWebs, updateWeb)
+	return web
+end
+
 function mainapi:CreateGUI()
 	local categoryapi = {
 		Type = 'MainWindow',
@@ -4868,7 +4968,11 @@ function mainapi:CreateGUI()
 			valuebox.Visible = true
 			valuebox:CaptureFocus()
 			local text = Color3.fromHSV(optionapi.Hue, optionapi.Sat, optionapi.Value)
-			valuebox.Text = math.round(text.R * 255)..', '..math.round(text.G * 255)..', '..math.round(text.B * 255)
+			if mainapi.ColorPickerMode and mainapi.ColorPickerMode.Value == 'Custom' then
+				valuebox.Text = '#'..text:ToHex():upper()
+			else
+				valuebox.Text = math.round(text.R * 255)..', '..math.round(text.G * 255)..', '..math.round(text.B * 255)
+			end
 		end)
 		slider.InputBegan:Connect(function(inputObj)
 			if
@@ -4964,6 +5068,27 @@ function mainapi:CreateGUI()
 	return categoryapi
 end
 
+function mainapi:SetHiddenEditor(enabled)
+	self.EditGUI = enabled and true or false
+	for _, category in self.Categories do
+		if category.Type == 'Category' and category.RefreshEditor then
+			category:RefreshEditor()
+		end
+	end
+	for _, module in self.Modules do
+		if module.RefreshVisibility then
+			module:RefreshVisibility()
+		end
+		if self.EditGUI then
+			if module.Children then module.Children.Visible = false end
+			if module.FavoriteChildren then module.FavoriteChildren.Visible = false end
+		end
+	end
+	if not self.EditGUI and self.Loaded then
+		self:Save()
+	end
+end
+
 function mainapi:CreateCategory(categorysettings)
 	local categoryapi = {
 		Type = 'Category',
@@ -4972,6 +5097,7 @@ function mainapi:CreateCategory(categorysettings)
 
 	local window = Instance.new('TextButton')
 	window.Name = categorysettings.Name..'Category'
+	addWeb(window)
 	window.Size = UDim2.fromOffset(220, 41)
 	window.Position = UDim2.fromOffset(236, 60)
 	window.BackgroundColor3 = uipallet.Main
@@ -5000,18 +5126,91 @@ function mainapi:CreateCategory(categorysettings)
 	title.TextColor3 = uipallet.Text
 	title.TextSize = 13
 	title.FontFace = uipallet.Font
+	title.Size = UDim2.new(1, -(categorysettings.Size.X.Offset > 18 and 110 or 103), 0, 41)
 	title.Parent = window
+	local isTouchOnly = inputService.TouchEnabled
+	local headerHovered = false
+	local editbutton = Instance.new('TextButton')
+	editbutton.Name = 'EditHidden'
+	editbutton.Size = UDim2.fromOffset(28, 40)
+	editbutton.Position = UDim2.new(1, -59, 0, 0)
+	editbutton.BackgroundTransparency = 1
+	editbutton.AutoButtonColor = false
+	editbutton.Text = ''
+	editbutton.Visible = isTouchOnly
+	editbutton.ZIndex = window.ZIndex + 3
+	editbutton.Parent = window
+	addTooltip(editbutton, 'edit hidden modules')
+	local pencil = Instance.new('ImageLabel')
+	pencil.Name = 'Pencil'
+	pencil.Size = UDim2.fromOffset(16, 16)
+	pencil.Position = UDim2.fromOffset(6, 12)
+	pencil.BackgroundTransparency = 1
+	pencil.Image = getcustomasset('aerov4/assets/new/edit.png')
+	pencil.ImageColor3 = Color3.fromRGB(190, 190, 190)
+	pencil.ZIndex = editbutton.ZIndex + 1
+	pencil.Parent = editbutton
+	local donebutton = Instance.new('TextButton')
+	donebutton.Name = 'Done'
+	donebutton.Size = UDim2.fromOffset(46, 40)
+	donebutton.Position = UDim2.new(1, -79, 0, 0)
+	donebutton.BackgroundTransparency = 1
+	donebutton.AutoButtonColor = false
+	donebutton.Text = 'done'
+	donebutton.TextColor3 = Color3.fromRGB(205, 205, 205)
+	donebutton.TextSize = 13
+	donebutton.FontFace = uipallet.Font
+	donebutton.Visible = false
+	donebutton.ZIndex = window.ZIndex + 3
+	donebutton.Parent = window
+	local hiddencount = Instance.new('TextLabel')
+	hiddencount.Name = 'HiddenCount'
+	hiddencount.Size = UDim2.fromOffset(28, 40)
+	hiddencount.Position = UDim2.new(1, -88, 0, 0)
+	hiddencount.BackgroundTransparency = 1
+	hiddencount.Text = ''
+	hiddencount.TextXAlignment = Enum.TextXAlignment.Right
+	hiddencount.TextColor3 = color.Dark(uipallet.Text, 0.16)
+	hiddencount.TextSize = 12
+	hiddencount.FontFace = uipallet.Font
+	hiddencount.Visible = false
+	hiddencount.Parent = window
+	categoryapi.EditButton = editbutton
+	categoryapi.DoneButton = donebutton
+	function categoryapi:RefreshEditor()
+		local editing = mainapi.EditGUI == true
+		editbutton.Visible = not editing and (isTouchOnly or headerHovered)
+		donebutton.Visible = editing
+		local count = 0
+		for _, module in mainapi.Modules do
+			if module.Category == categorysettings.Name and module.Visible == false then
+				count += 1
+			end
+		end
+		hiddencount.Text = count > 0 and tostring(count) or ''
+		hiddencount.Visible = count > 0 and not editing and not editbutton.Visible
+	end
+	window.MouseEnter:Connect(function()
+		headerHovered = true
+		pencil.ImageColor3 = Color3.fromRGB(230, 230, 230)
+		categoryapi:RefreshEditor()
+	end)
+	window.MouseLeave:Connect(function()
+		headerHovered = false
+		pencil.ImageColor3 = Color3.fromRGB(190, 190, 190)
+		categoryapi:RefreshEditor()
+	end)
 	local arrowbutton = Instance.new('TextButton')
 	arrowbutton.Name = 'Arrow'
-	arrowbutton.Size = UDim2.fromOffset(40, 40)
-	arrowbutton.Position = UDim2.new(1, -40, 0, 0)
+	arrowbutton.Size = UDim2.fromOffset(28, 40)
+	arrowbutton.Position = UDim2.new(1, -29, 0, 0)
 	arrowbutton.BackgroundTransparency = 1
 	arrowbutton.Text = ''
 	arrowbutton.Parent = window
 	local arrow = Instance.new('ImageLabel')
 	arrow.Name = 'Arrow'
 	arrow.Size = UDim2.fromOffset(9, 4)
-	arrow.Position = UDim2.fromOffset(20, 18)
+	arrow.Position = UDim2.fromOffset(9, 18)
 	arrow.BackgroundTransparency = 1
 	arrow.Image = getcustomasset('aerov4/assets/new/expandup.png')
 	arrow.ImageColor3 = Color3.fromRGB(140, 140, 140)
@@ -5050,6 +5249,7 @@ function mainapi:CreateCategory(categorysettings)
 
 		local moduleapi = {
 			Enabled = false,
+			Visible = true,
 			Options = {},
 			Bind = {},
 			Index = getTableSize(mainapi.Modules),
@@ -5067,12 +5267,27 @@ function mainapi:CreateCategory(categorysettings)
 		modulebutton.BackgroundColor3 = uipallet.Main
 		modulebutton.BorderSizePixel = 0
 		modulebutton.AutoButtonColor = false
-		modulebutton.Text = '            '..modulesettings.Name
+		modulebutton.Text = ''
 		modulebutton.TextXAlignment = Enum.TextXAlignment.Left
 		modulebutton.TextColor3 = color.Dark(uipallet.Text, 0.16)
 		modulebutton.TextSize = 14
 		modulebutton.FontFace = uipallet.Font
 		modulebutton.Parent = children
+		local moduleTitle = Instance.new('TextLabel')
+		moduleTitle.Name = 'ModuleTitle'
+		moduleTitle.Size = UDim2.new(1, -47, 1, 0)
+		moduleTitle.Position = UDim2.fromOffset(12, 0)
+		moduleTitle.BackgroundTransparency = 1
+		moduleTitle.Text = modulesettings.Name
+		moduleTitle.TextXAlignment = Enum.TextXAlignment.Left
+		moduleTitle.TextTruncate = Enum.TextTruncate.AtEnd
+		moduleTitle.TextColor3 = modulebutton.TextColor3
+		moduleTitle.TextSize = 14
+		moduleTitle.FontFace = uipallet.Font
+		moduleTitle.Parent = modulebutton
+		modulebutton:GetPropertyChangedSignal('TextColor3'):Connect(function()
+			moduleTitle.TextColor3 = modulebutton.TextColor3
+		end)
 		addTooltip(modulebutton, modulesettings.Tooltip or modulesettings.Name)
 
 		local gradient = Instance.new('UIGradient')
@@ -5334,6 +5549,13 @@ function mainapi:CreateCategory(categorysettings)
 				if obj then obj:Destroy() end
 			end
 			favbutton.Parent = favcat.Children
+			favbutton.Visible = mainapi.EditGUI or moduleapi.Visible ~= false
+			local favTitle = favbutton:FindFirstChild('ModuleTitle')
+			if favTitle then
+				favbutton:GetPropertyChangedSignal('TextColor3'):Connect(function()
+					if favTitle.Parent then favTitle.TextColor3 = favbutton.TextColor3 end
+				end)
+			end
 			moduleapi.FavoriteButton = favbutton
 			addTooltip(favbutton, modulesettings.Tooltip or modulesettings.Name)
 
@@ -5411,14 +5633,27 @@ function mainapi:CreateCategory(categorysettings)
 				sync()
 			end)
 			favbutton.MouseButton1Click:Connect(function()
+				if mainapi.EditGUI then return end
 				if not mobileEditorOpen then
 					moduleapi:Toggle()
 				end
 				task.defer(sync)
 			end)
-			favbutton.MouseButton2Click:Connect(toggleFavChildren)
+			local favoriteEye = favbutton:FindFirstChild('Edit')
+			if favoriteEye then
+				favoriteEye.MouseButton1Click:Connect(function()
+					if mainapi.EditGUI then
+						moduleapi:SetVisible(not moduleapi.Visible)
+					end
+				end)
+			end
+			favbutton.MouseButton2Click:Connect(function()
+				if not mainapi.EditGUI then toggleFavChildren() end
+			end)
 			if favdotsbutton then
-				favdotsbutton.MouseButton1Click:Connect(toggleFavChildren)
+				favdotsbutton.MouseButton1Click:Connect(function()
+					if not mainapi.EditGUI then toggleFavChildren() end
+				end)
 			end
 			if favpin then
 				addTooltip(favpin, 'take it outta favorites')
@@ -5428,6 +5663,7 @@ function mainapi:CreateCategory(categorysettings)
 			end
 
 			sync()
+			if moduleapi.RefreshVisibility then moduleapi:RefreshVisibility() end
 		end
 
 		togglePin = function()
@@ -5466,7 +5702,7 @@ function mainapi:CreateCategory(categorysettings)
 		dots.Image = getcustomasset('aerov4/assets/new/dots.png')
 		dots.ImageColor3 = color.Light(uipallet.Main, 0.37)
 		dots.Parent = dotsbutton
-		modulechildren.Name = modulesettings.Name..'Children'
+		local shadow = Instance.new('TextButton')
 		modulechildren.Size = UDim2.new(1, 0, 0, 0)
 		modulechildren.BackgroundColor3 = color.Dark(uipallet.Main, 0.02)
 		modulechildren.BorderSizePixel = 0
@@ -5543,6 +5779,27 @@ function mainapi:CreateCategory(categorysettings)
 		divider.BorderSizePixel = 0
 		divider.Visible = false
 		divider.Parent = modulebutton
+		local eyeButton = Instance.new('TextButton')
+		eyeButton.Name = 'Edit'
+		eyeButton.Size = UDim2.fromOffset(44, 40)
+		eyeButton.Position = UDim2.fromOffset(0, 0)
+		eyeButton.BackgroundTransparency = 1
+		eyeButton.AutoButtonColor = false
+		eyeButton.Text = ''
+		eyeButton.ZIndex = modulebutton.ZIndex + 3
+		eyeButton.Visible = false
+		eyeButton.Parent = modulebutton
+		local eyeIcon = Instance.new('ImageLabel')
+		eyeIcon.Name = 'EditIcon'
+		eyeIcon.Size = UDim2.fromOffset(36, 26)
+		eyeIcon.Position = UDim2.fromOffset(4, 7)
+		eyeIcon.BackgroundTransparency = 1
+		eyeIcon.ScaleType = Enum.ScaleType.Fit
+		eyeIcon.Image = getcustomasset('aerov4/assets/new/eyeopen.png')
+		eyeIcon.ImageColor3 = Color3.fromRGB(235, 235, 235)
+		eyeIcon.ZIndex = eyeButton.ZIndex + 1
+		eyeIcon.Parent = eyeButton
+		moduleapi.Edit = eyeButton
 		modulesettings.Function = modulesettings.Function or function() end
 		addMaid(moduleapi)
 		local function updateUI(state, multiple)
@@ -5564,6 +5821,46 @@ function mainapi:CreateCategory(categorysettings)
 				mainapi:UpdateTextGUI()
 			end
 			task.spawn(modulesettings.Function, state)
+		end
+
+		function moduleapi:RefreshVisibility()
+			local editing = mainapi.EditGUI == true
+			modulebutton.Visible = editing or self.Visible ~= false
+			moduleTitle.Position = UDim2.fromOffset(editing and 52 or 12, 0)
+			moduleTitle.Size = UDim2.new(1, editing and -84 or -47, 1, 0)
+			moduleTitle.TextTransparency = editing and self.Visible == false and 0.45 or 0
+			eyeButton.Visible = editing
+			eyeIcon.Image = getcustomasset('aerov4/assets/new/'..(self.Visible == false and 'eyeclosed.png' or 'eyeopen.png'))
+			eyeIcon.ImageColor3 = self.Visible == false and Color3.fromRGB(155, 155, 155) or Color3.fromRGB(235, 235, 235)
+			if favbutton then
+				favbutton.Visible = editing or self.Visible ~= false
+				local favoriteTitle = favbutton:FindFirstChild('ModuleTitle')
+				if favoriteTitle then
+					favoriteTitle.Position = moduleTitle.Position
+					favoriteTitle.Size = moduleTitle.Size
+					favoriteTitle.TextTransparency = moduleTitle.TextTransparency
+				end
+				local favoriteEye = favbutton:FindFirstChild('Edit')
+				if favoriteEye then
+					favoriteEye.Visible = editing
+					local favoriteIcon = favoriteEye:FindFirstChild('EditIcon')
+					if favoriteIcon then
+						favoriteIcon.Image = eyeIcon.Image
+						favoriteIcon.ImageColor3 = eyeIcon.ImageColor3
+					end
+				end
+			end
+		end
+
+		function moduleapi:SetVisible(state)
+			self.Visible = state ~= false
+			if not self.Visible then
+				childrenHome()
+				modulechildren.Visible = false
+				if favchildren then favchildren.Visible = false end
+			end
+			self:RefreshVisibility()
+			if categoryapi.RefreshEditor then categoryapi:RefreshEditor() end
 		end
 
 		function moduleapi:SetEnabled(state, multiple)
@@ -5643,7 +5940,9 @@ function mainapi:CreateCategory(categorysettings)
 				dots.ImageColor3 = color.Light(uipallet.Main, 0.37)
 			end
 		end)
-		dotsbutton.MouseButton1Click:Connect(toggleHomeChildren)
+		dotsbutton.MouseButton1Click:Connect(function()
+			if not mainapi.EditGUI then toggleHomeChildren() end
+		end)
 		dotsbutton.MouseButton2Click:Connect(function()
 			local existingReset = modulebutton:FindFirstChild('ResetCover')
 			if existingReset then
@@ -5711,11 +6010,19 @@ function mainapi:CreateCategory(categorysettings)
 			pinbutton.Visible = hovered or modulechildren.Visible or moduleapi.Pinned
 		end)
 		modulebutton.MouseButton1Click:Connect(function()
+			if mainapi.EditGUI then return end
 			if not mobileEditorOpen then
 				moduleapi:Toggle()
 			end
 		end)
-		modulebutton.MouseButton2Click:Connect(toggleHomeChildren)
+		modulebutton.MouseButton2Click:Connect(function()
+			if not mainapi.EditGUI then toggleHomeChildren() end
+		end)
+		eyeButton.MouseButton1Click:Connect(function()
+			if mainapi.EditGUI then
+				moduleapi:SetVisible(not moduleapi.Visible)
+			end
+		end)
 		windowlist:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(function()
 			if mainapi.ThreadFix then
 				setthreadidentity(8)
@@ -5725,6 +6032,8 @@ function mainapi:CreateCategory(categorysettings)
 
 		moduleapi.Object = modulebutton
 		mainapi.Modules[modulesettings.Name] = moduleapi
+		moduleapi:RefreshVisibility()
+		categoryapi:RefreshEditor()
 
 		local sorting = {}
 		for _, v in mainapi.Modules do
@@ -5745,6 +6054,15 @@ function mainapi:CreateCategory(categorysettings)
 		return moduleapi
 	end
 
+	editbutton.MouseButton1Click:Connect(function()
+		if not categoryapi.Expanded then categoryapi:Expand() end
+		mainapi:SetHiddenEditor(true)
+	end)
+	donebutton.MouseButton1Click:Connect(function()
+		mainapi:SetHiddenEditor(false)
+	end)
+	categoryapi:RefreshEditor()
+
 	function categoryapi:Expand()
 		self.Expanded = not self.Expanded
 		local expandTween = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
@@ -5752,7 +6070,7 @@ function mainapi:CreateCategory(categorysettings)
 			children.Visible = true
 			tween:Tween(arrow, expandTween, {Rotation = 0})
 			tween:Tween(window, expandTween, {
-				Size = UDim2.fromOffset(220, math.min(41 + windowlist.AbsoluteContentSize.Y / scale.Scale, 601))
+				Size = UDim2.fromOffset(220, math.min(41 + windowlist.AbsoluteContentSize.Y / scale.Scale, math.max(100, math.min(601, (gui.AbsoluteSize.Y - window.AbsolutePosition.Y - 16) / scale.Scale))))
 			})
 			divider.Visible = children.CanvasPosition.Y > 10
 		else
@@ -5778,7 +6096,8 @@ function mainapi:CreateCategory(categorysettings)
 			return
 		end
 		if (inputObj.UserInputType == Enum.UserInputType.MouseButton1 or inputObj.UserInputType == Enum.UserInputType.Touch)
-			and inputObj.Position.Y < window.AbsolutePosition.Y + (41 * scale.Scale) then
+			and inputObj.Position.Y < window.AbsolutePosition.Y + (41 * scale.Scale)
+			and inputObj.Position.X < window.AbsolutePosition.X + (125 * scale.Scale) then
 			headerDragMoved = false
 			local startPos = Vector2.new(inputObj.Position.X, inputObj.Position.Y)
 			local movedConn, endedConn
@@ -5809,15 +6128,7 @@ function mainapi:CreateCategory(categorysettings)
 		arrow.ImageColor3 = Color3.fromRGB(140, 140, 140)
 	end)
 	arrowbutton.MouseButton1Click:Connect(function()
-		categoryapi.Expanded = not categoryapi.Expanded
-		children.Visible = categoryapi.Expanded
-		tween:Tween(arrow, uipallet.Tween, {
-			Rotation = categoryapi.Expanded and 0 or 180
-		})
-		local targetSize = categoryapi.Expanded and UDim2.fromOffset(220, math.min(41 + windowlist.AbsoluteContentSize.Y / scale.Scale, 601)) or UDim2.fromOffset(220, 41)
-		tween:Tween(window, uipallet.Tween, {
-			Size = targetSize
-		})
+		categoryapi:Expand()
 	end)
 	children:GetPropertyChangedSignal('CanvasPosition'):Connect(function()
 		if self.ThreadFix then
@@ -5831,7 +6142,7 @@ function mainapi:CreateCategory(categorysettings)
 		end
 		children.CanvasSize = UDim2.fromOffset(0, windowlist.AbsoluteContentSize.Y / scale.Scale)
 		if categoryapi.Expanded then
-			window.Size = UDim2.fromOffset(220, math.min(41 + windowlist.AbsoluteContentSize.Y / scale.Scale, 601))
+			window.Size = UDim2.fromOffset(220, math.min(41 + windowlist.AbsoluteContentSize.Y / scale.Scale, math.max(100, math.min(601, (gui.AbsoluteSize.Y - window.AbsolutePosition.Y - 16) / scale.Scale))))
 		end
 	end)
 
@@ -6193,6 +6504,301 @@ function mainapi:CreateCategoryList(categorysettings)
 	cursedpadding.LayoutOrder = -1
 	categorysettings.Function = categorysettings.Function or function() end
 
+	local function renameProfile(old, new)
+		local current = old == mainapi.Profile
+		if current then
+			mainapi:Save()
+		end
+		pcall(function()
+			local from = 'aerov4/profiles/'..old..mainapi.Place..'.txt'
+			if isfile(from) then
+				writefile('aerov4/profiles/'..new..mainapi.Place..'.txt', readfile(from))
+				if delfile then
+					delfile(from)
+				end
+			end
+		end)
+		for _, p in mainapi.Profiles do
+			if p.Name == old then
+				p.Name = new
+			end
+		end
+		if current then
+			mainapi.Profile = new
+			if mainapi.ProfileLabel then
+				local displayName = #new > 10 and new:sub(1, 10)..'...' or new
+				mainapi.ProfileLabel.Text = displayName
+				mainapi.ProfileLabel.Size = UDim2.fromOffset(getfontsize(displayName, mainapi.ProfileLabel.TextSize, mainapi.ProfileLabel.Font).X + 16, 24)
+			end
+		end
+		mainapi:Save()
+		categoryapi:ChangeValue()
+	end
+
+	local function openProfileActions(object, v)
+		local existing = object:FindFirstChild('Actions')
+		if existing then
+			tween:Tween(object, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {Size = UDim2.fromOffset(200, 38)})
+			for _, c in existing:GetDescendants() do
+				if c:IsA('TextButton') then
+					tween:Tween(c, TweenInfo.new(0.12), {TextTransparency = 1, BackgroundTransparency = 1})
+				end
+			end
+			task.delay(0.18, function()
+				existing:Destroy()
+			end)
+			return
+		end
+		local gc = mainapi.GUIColor
+		local accent = gc and Color3.fromHSV(gc.Hue, gc.Sat, gc.Value) or Color3.fromRGB(255, 255, 255)
+		local holder = Instance.new('Frame')
+		holder.Name = 'Actions'
+		holder.Size = UDim2.new(1, -16, 0, 26)
+		holder.Position = UDim2.fromOffset(8, 40)
+		holder.BackgroundTransparency = 1
+		holder.Parent = object
+		local layout = Instance.new('UIListLayout')
+		layout.FillDirection = Enum.FillDirection.Horizontal
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Padding = UDim.new(0, 6)
+		layout.Parent = holder
+		tween:Tween(object, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {Size = UDim2.fromOffset(200, 72)})
+		local order = 0
+		local function pill(text, textColor)
+			order += 1
+			local b = Instance.new('TextButton')
+			b.Size = UDim2.new(1 / 3, -4, 1, 0)
+			b.BackgroundColor3 = color.Light(uipallet.Main, 0.07)
+			b.BackgroundTransparency = 1
+			b.AutoButtonColor = false
+			b.Text = text
+			b.TextColor3 = textColor or color.Dark(uipallet.Text, 0.12)
+			b.TextTransparency = 1
+			b.TextSize = 13
+			b.FontFace = uipallet.Font
+			b.TextYAlignment = Enum.TextYAlignment.Center
+			b.LayoutOrder = order
+			b.Parent = holder
+			addCorner(b, UDim.new(0, 6))
+			local stroke = Instance.new('UIStroke')
+			stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			stroke.Color = accent
+			stroke.Transparency = 1
+			stroke.Parent = b
+			tween:Tween(b, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundTransparency = 0, TextTransparency = 0})
+			b.MouseEnter:Connect(function()
+				tween:Tween(stroke, TweenInfo.new(0.12), {Transparency = 0.4})
+			end)
+			b.MouseLeave:Connect(function()
+				tween:Tween(stroke, TweenInfo.new(0.12), {Transparency = 1})
+			end)
+			return b
+		end
+		local renameBtn = pill('Rename')
+		local copyBtn = pill('Copy')
+		local canDelete = v.Name ~= mainapi.Profile and v.Name ~= 'default'
+		local deleteBtn = pill('Delete', canDelete and Color3.fromRGB(255, 110, 110) or color.Dark(uipallet.Text, 0.55))
+		if v.Name == 'default' then
+			renameBtn.TextColor3 = color.Dark(uipallet.Text, 0.55)
+		end
+		copyBtn.MouseButton1Click:Connect(function()
+			local base = v.Name..' copy'
+			local name, n = base, 2
+			while categoryapi:GetValue(name) do
+				name = base..' '..n
+				n += 1
+			end
+			if v.Name == mainapi.Profile then
+				mainapi:Save()
+			end
+			local from = 'aerov4/profiles/'..v.Name..mainapi.Place..'.txt'
+			if isfile(from) then
+				pcall(writefile, 'aerov4/profiles/'..name..mainapi.Place..'.txt', readfile(from))
+			end
+			categoryapi:ChangeValue(name)
+			mainapi:Save()
+		end)
+		local armed = false
+		deleteBtn.MouseButton1Click:Connect(function()
+			if not canDelete then
+				mainapi:CreateNotification('Profiles', "switch to another profile first to delete this one", 3, 'warning')
+				return
+			end
+			if not armed then
+				armed = true
+				deleteBtn.Text = 'Sure?'
+				task.delay(3, function()
+					if deleteBtn.Parent then
+						armed = false
+						deleteBtn.Text = 'Delete'
+					end
+				end)
+				return
+			end
+			categoryapi:ChangeValue(v.Name)
+			mainapi:Save()
+		end)
+		renameBtn.MouseButton1Click:Connect(function()
+			if v.Name == 'default' then return end
+			local title = object:FindFirstChild('Title')
+			if title then
+				title.Visible = false
+			end
+			local box = Instance.new('TextBox')
+			box.Size = UDim2.new(1, -40, 0, 24)
+			box.Position = UDim2.fromOffset(6, 7)
+			box.BackgroundColor3 = color.Light(uipallet.Main, 0.07)
+			box.Text = v.Name
+			box.PlaceholderText = 'new name'
+			box.TextColor3 = uipallet.Text
+			box.TextXAlignment = Enum.TextXAlignment.Left
+			box.TextSize = 14
+			box.FontFace = uipallet.Font
+			box.ClearTextOnFocus = false
+			box.Parent = object
+			addCorner(box, UDim.new(0, 6))
+			local boxpad = Instance.new('UIPadding')
+			boxpad.PaddingLeft = UDim.new(0, 6)
+			boxpad.Parent = box
+			box:CaptureFocus()
+			box.FocusLost:Connect(function(enter)
+				local new = box.Text:gsub('[^%w%s_%-]', ''):gsub('^%s+', ''):gsub('%s+$', ''):sub(1, 24)
+				if enter and new ~= '' and new ~= v.Name and not categoryapi:GetValue(new) then
+					renameProfile(v.Name, new)
+				else
+					box:Destroy()
+					if title then
+						title.Visible = true
+					end
+				end
+			end)
+		end)
+	end
+
+	local function oldProfileActions(object, v)
+		local existing = object:FindFirstChild('Actions')
+		if existing then
+			existing:Destroy()
+			return
+		end
+		local bar = Instance.new('Frame')
+		bar.Name = 'Actions'
+		bar.Size = UDim2.new(1, -25, 1, 0)
+		bar.BackgroundColor3 = color.Light(uipallet.Main, 0.02)
+		bar.BorderSizePixel = 0
+		bar.ZIndex = 3
+		bar.Parent = object
+		addCorner(bar)
+		local layout = Instance.new('UIListLayout')
+		layout.FillDirection = Enum.FillDirection.Horizontal
+		layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+		layout.VerticalAlignment = Enum.VerticalAlignment.Center
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Padding = UDim.new(0, 4)
+		layout.Parent = bar
+		local pad = Instance.new('UIPadding')
+		pad.PaddingRight = UDim.new(0, 4)
+		pad.PaddingLeft = UDim.new(0, 6)
+		pad.Parent = bar
+		local order = 0
+		local function makeButton(text, textColor)
+			order += 1
+			local b = Instance.new('TextButton')
+			b.Size = UDim2.fromOffset(getfontsize(text, 12, uipallet.Font).X + 14, 24)
+			b.BackgroundColor3 = color.Light(uipallet.Main, 0.08)
+			b.AutoButtonColor = false
+			b.Text = text
+			b.TextColor3 = textColor or color.Dark(uipallet.Text, 0.16)
+			b.TextSize = 12
+			b.FontFace = uipallet.Font
+			b.ZIndex = 4
+			b.LayoutOrder = order
+			b.Parent = bar
+			addCorner(b, UDim.new(0, 4))
+			b.MouseEnter:Connect(function()
+				b.BackgroundColor3 = color.Light(uipallet.Main, 0.14)
+			end)
+			b.MouseLeave:Connect(function()
+				b.BackgroundColor3 = color.Light(uipallet.Main, 0.08)
+			end)
+			return b
+		end
+		local renameBtn = v.Name ~= 'default' and makeButton('rename') or nil
+		local copyBtn = makeButton('copy')
+		local deleteBtn = (v.Name ~= mainapi.Profile and v.Name ~= 'default') and makeButton('delete', Color3.fromRGB(255, 110, 110)) or nil
+		local closeBtn = makeButton('x')
+		closeBtn.MouseButton1Click:Connect(function()
+			bar:Destroy()
+		end)
+		copyBtn.MouseButton1Click:Connect(function()
+			local base = v.Name..' copy'
+			local name, n = base, 2
+			while categoryapi:GetValue(name) do
+				name = base..' '..n
+				n += 1
+			end
+			if v.Name == mainapi.Profile then
+				mainapi:Save()
+			end
+			local from = 'aerov4/profiles/'..v.Name..mainapi.Place..'.txt'
+			if isfile(from) then
+				pcall(writefile, 'aerov4/profiles/'..name..mainapi.Place..'.txt', readfile(from))
+			end
+			categoryapi:ChangeValue(name)
+			mainapi:Save()
+		end)
+		if deleteBtn then
+			local armed = false
+			deleteBtn.MouseButton1Click:Connect(function()
+				if not armed then
+					armed = true
+					deleteBtn.Text = 'sure?'
+					deleteBtn.Size = UDim2.fromOffset(getfontsize('sure?', 12, uipallet.Font).X + 14, 24)
+					task.delay(3, function()
+						if deleteBtn.Parent then
+							armed = false
+							deleteBtn.Text = 'delete'
+							deleteBtn.Size = UDim2.fromOffset(getfontsize('delete', 12, uipallet.Font).X + 14, 24)
+						end
+					end)
+					return
+				end
+				categoryapi:ChangeValue(v.Name)
+				mainapi:Save()
+			end)
+		end
+		if renameBtn then
+			renameBtn.MouseButton1Click:Connect(function()
+				for _, c in bar:GetChildren() do
+					if c:IsA('TextButton') then
+						c.Visible = false
+					end
+				end
+				local box = Instance.new('TextBox')
+				box.Size = UDim2.new(1, 0, 0, 26)
+				box.BackgroundColor3 = color.Light(uipallet.Main, 0.08)
+				box.Text = v.Name
+				box.PlaceholderText = 'new name'
+				box.TextColor3 = uipallet.Text
+				box.TextSize = 13
+				box.FontFace = uipallet.Font
+				box.ClearTextOnFocus = false
+				box.ZIndex = 4
+				box.Parent = bar
+				addCorner(box, UDim.new(0, 4))
+				box:CaptureFocus()
+				box.FocusLost:Connect(function(enter)
+					local new = box.Text:gsub('[^%w%s_%-]', ''):gsub('^%s+', ''):gsub('%s+$', ''):sub(1, 24)
+					if enter and new ~= '' and new ~= v.Name and not categoryapi:GetValue(new) then
+						renameProfile(v.Name, new)
+					else
+						bar:Destroy()
+					end
+				end)
+			end)
+		end
+	end
+
 	function categoryapi:ChangeValue(val)
 		if val then
 			if categorysettings.Profiles then
@@ -6206,6 +6812,12 @@ function mainapi:CreateCategoryList(categorysettings)
 					end
 				else
 					table.insert(mainapi.Profiles, {Name = val, Bind = {}})
+					local path = 'aerov4/profiles/'..val..mainapi.Place..'.txt'
+					if not isfile(path) and mainapi.DefaultProfileData then
+						pcall(function()
+							writefile(path, httpService:JSONEncode(mainapi.DefaultProfileData))
+						end)
+					end
 				end
 			else
 				local ind = table.find(self.List, val)
@@ -6246,7 +6858,7 @@ function mainapi:CreateCategoryList(categorysettings)
 				objectstroke.Parent = object
 				local objecttitle = Instance.new('TextLabel')
 				objecttitle.Name = 'Title'
-				objecttitle.Size = UDim2.new(1, -10, 1, 0)
+				objecttitle.Size = UDim2.new(1, -10, 0, 38)
 				objecttitle.Position = UDim2.fromOffset(10, 0)
 				objecttitle.BackgroundTransparency = 1
 				objecttitle.Text = v.Name
@@ -6347,9 +6959,7 @@ function mainapi:CreateCategoryList(categorysettings)
 					end
 				end)
 				dotsbutton.MouseButton1Click:Connect(function()
-					if v.Name ~= mainapi.Profile then
-						categoryapi:ChangeValue(v.Name)
-					end
+					openProfileActions(object, v)
 				end)
 				object.MouseButton1Click:Connect(function()
 						if mainapi.ThreadFix then
@@ -6536,8 +7146,15 @@ function mainapi:CreateCategoryList(categorysettings)
 	addbutton.MouseLeave:Connect(function()
 		addbutton.ImageTransparency = 0.3
 	end)
+	local function canAdd(text)
+		if text == '' then return false end
+		if categorysettings.Profiles then
+			return text:match('^[%w%s_%-]+$') ~= nil and not categoryapi:GetValue(text)
+		end
+		return not table.find(categoryapi.List, text)
+	end
 	addbutton.MouseButton1Click:Connect(function()
-		if not table.find(categoryapi.List, addvalue.Text) then
+		if canAdd(addvalue.Text) then
 			categoryapi:ChangeValue(addvalue.Text)
 			addvalue.Text = ''
 		end
@@ -6555,7 +7172,7 @@ function mainapi:CreateCategoryList(categorysettings)
 		categoryapi:Expand()
 	end)
 	addvalue.FocusLost:Connect(function(enter)
-		if enter and not table.find(categoryapi.List, addvalue.Text) then
+		if enter and canAdd(addvalue.Text) then
 			categoryapi:ChangeValue(addvalue.Text)
 			addvalue.Text = ''
 		end
@@ -6745,10 +7362,12 @@ function mainapi:CreateSearch()
 				end
 
 				local function restoreChildren()
-					if v.Children and homeParent then
-						v.Children.Parent = homeParent
-						v.Children.LayoutOrder = homeLayoutOrder
-						v.Children.Visible = false
+					if v.Children and homeParent and homeParent.Parent then
+						pcall(function()
+							v.Children.Parent = homeParent
+							v.Children.LayoutOrder = homeLayoutOrder
+							v.Children.Visible = false
+						end)
 					end
 				end
 
@@ -7190,6 +7809,34 @@ function mainapi:CreateLegit()
 	return legitapi
 end
 
+local notifStack = {}
+local function notifPosition(corner, k)
+	if corner == 'Top Left' then
+		return UDim2.new(0, 0, 0, 6 + 78 * (k - 1))
+	elseif corner == 'Top Right' then
+		return UDim2.new(1, 0, 0, 6 + 78 * (k - 1))
+	elseif corner == 'Bottom Left' then
+		return UDim2.new(0, 0, 1, -(29 + 78 * k))
+	end
+	return UDim2.new(1, 0, 1, -(29 + 78 * k))
+end
+local function restackNotifications()
+	for k, n in notifStack do
+		if n.Parent then
+			local target = notifPosition(n:GetAttribute('Corner') or 'Bottom Right', k)
+			if tween.Tween then
+				tween:Tween(n, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {Position = target})
+			else
+				n.Position = target
+			end
+		end
+	end
+end
+
+function mainapi:GetNotificationCorner()
+	return self.NotificationPosition and self.NotificationPosition.Value or 'Bottom Right'
+end
+
 function mainapi:CreateNotification(title, text, duration, type)
 	if getgenv().Closet then return end
 	if not self.Notifications.Enabled then return end
@@ -7197,11 +7844,17 @@ function mainapi:CreateNotification(title, text, duration, type)
 		if self.ThreadFix then
 			setthreadidentity(8)
 		end
-		local i = #notifications:GetChildren() + 1
+		local corner = self:GetNotificationCorner()
+		local leftSide = corner:find('Left') ~= nil
 		local notification = Instance.new('ImageLabel')
 		notification.Name = 'Notification'
-		notification.Size = UDim2.fromOffset(math.max(getfontsize(removeTags(text), 14, uipallet.Font).X + 80, 266), 75)
-		notification.Position = UDim2.new(1, 0, 1, -(29 + (78 * i)))
+		local screenWidth = scaledgui.AbsoluteSize.X / math.max(scale.Scale, 0.01)
+		local maxWidth = math.max((screenWidth > 0 and screenWidth or 800) - 20, 200)
+		notification.Size = UDim2.fromOffset(math.min(math.max(getfontsize(removeTags(text), 14, uipallet.Font).X + 80, 266), maxWidth), 75)
+		notification.AnchorPoint = Vector2.new(leftSide and 1 or 0, 0)
+		notification:SetAttribute('Corner', corner)
+		table.insert(notifStack, notification)
+		notification.Position = notifPosition(corner, #notifStack)
 		notification.ZIndex = 5
 		notification.BackgroundTransparency = 1
 		notification.Image = getcustomasset('aerov4/assets/new/notification.png')
@@ -7304,21 +7957,28 @@ function mainapi:CreateNotification(title, text, duration, type)
 
 		if tween.Tween then
 			tween:Tween(notification, TweenInfo.new(0.4, Enum.EasingStyle.Exponential), {
-				AnchorPoint = Vector2.new(1, 0)
+				AnchorPoint = Vector2.new(leftSide and 0 or 1, 0)
 			}, tween.tweenstwo)
 			tween:Tween(progress, TweenInfo.new(duration, Enum.EasingStyle.Linear), {
 				Size = UDim2.fromOffset(0, 2)
 			})
+		else
+			notification.AnchorPoint = Vector2.new(leftSide and 0 or 1, 0)
 		end
 		task.delay(duration, function()
 			if tween.Tween then
 				tween:Tween(notification, TweenInfo.new(0.4, Enum.EasingStyle.Exponential), {
-					AnchorPoint = Vector2.new(0, 0)
+					AnchorPoint = Vector2.new(leftSide and 1 or 0, 0)
 				}, tween.tweenstwo)
 			end
 			task.wait(0.2)
+			local index = table.find(notifStack, notification)
+			if index then
+				table.remove(notifStack, index)
+			end
 			notification:ClearAllChildren()
 			notification:Destroy()
+			restackNotifications()
 		end)
 	end)
 end
@@ -7331,7 +7991,13 @@ function mainapi:Load(skipgui, profile)
 	local guidata = {Categories = {}}
 	local savecheck = true
 
-	local guiFile = 'aerov4/profiles/'..game.GameId..'.gui.txt'
+	local guiFile = 'aerov4/profiles/'..self.Place..'.gui.txt'
+	local sharedGuiFile = 'aerov4/profiles/'..game.GameId..'.gui.txt'
+	if not isfile(guiFile) and guiFile ~= sharedGuiFile and isfile(sharedGuiFile) then
+		pcall(function()
+			writefile(guiFile, readfile(sharedGuiFile))
+		end)
+	end
 
 	if isfile(guiFile) then
 		local success, result = pcall(loadJson, guiFile)
@@ -7416,6 +8082,17 @@ function mainapi:Load(skipgui, profile)
 		self.ProfileLabel.Size = UDim2.fromOffset(getfontsize(displayName, self.ProfileLabel.TextSize, self.ProfileLabel.Font).X + 16, 24)
 	end
 
+	if not self.DefaultProfileData then
+		local blank = {Categories = {}, Modules = {}, Legit = {}}
+		for i, v in self.Modules do
+			blank.Modules[i] = {Enabled = false, Bind = {}, Options = self:SaveOptions(v, true), Pinned = false, KeybindMode = 'Toggle'}
+		end
+		for i, v in self.Legit.Modules do
+			blank.Legit[i] = {Enabled = false, Options = v.Options and self:SaveOptions(v, v.Options) or nil}
+		end
+		self.DefaultProfileData = blank
+	end
+
 	local profileFile = 'aerov4/profiles/'..self.Profile..self.Place..'.txt'
 	local savedata = { Categories = {}, Modules = {}, Legit = {} }
 
@@ -7476,12 +8153,18 @@ function mainapi:Load(skipgui, profile)
 		if object.Options and v.Options then
 			self:LoadOptions(object, v.Options)
 		end
+		if object.SetVisible then object:SetVisible(v.Visible ~= false) end
 
 		if v.Enabled ~= object.Enabled then
-			if skipgui and self.ToggleNotifications.Enabled then
-				self:CreateNotification('Module Toggled', i .. "<font color='#FFFFFF'> has been </font>" .. (v.Enabled and "<font color='#5AFF5A'>Enabled</font>" or "<font color='#FF5A5A'>Disabled</font>") .. "<font color='#FFFFFF'>!</font>", 0.75)
+			if self.ThreadFix then
+				setthreadidentity(8)
 			end
-			object:Toggle(true)
+			pcall(function()
+				object:Toggle(true)
+			end)
+			if self.ThreadFix then
+				setthreadidentity(8)
+			end
 		end
 
 		object.KeybindMode = v.KeybindMode or "Toggle"
@@ -7558,6 +8241,7 @@ function mainapi:Load(skipgui, profile)
 	end
 
 	self.Loaded = savecheck
+	self:CreateNotification('Profiles', "<font color='#FFFFFF'>"..self.Profile.."</font> profile loaded", 3)
 	self.Categories.Main.Options.Bind:SetBind(self.Keybind)
 	if inputService.TouchEnabled and #self.Keybind == 1 and self.Keybind[1] == 'RightShift' then
 		local button = Instance.new('TextButton')
@@ -7673,7 +8357,7 @@ function mainapi:Save(newprofile)
 	end
 
 	guidata.Positions = {}
-	local oldgui = isfile('aerov4/profiles/'..game.GameId..'.gui.txt') and loadJson('aerov4/profiles/'..game.GameId..'.gui.txt')
+	local oldgui = isfile('aerov4/profiles/'..self.Place..'.gui.txt') and loadJson('aerov4/profiles/'..self.Place..'.gui.txt')
 	if type(oldgui) == 'table' then
 		for i, v in oldgui.Categories or {} do
 			if not self.Categories[i] then
@@ -7711,6 +8395,7 @@ function mainapi:Save(newprofile)
 
 		savedata.Modules[i] = {
 			Enabled = v.Enabled,
+			Visible = v.Visible ~= false,
 			Bind = mobileSave or (v.Bind.Button and {Mobile = true, X = v.Bind.Button.Position.X.Offset, Y = v.Bind.Button.Position.Y.Offset} or v.Bind),
 			Options = mainapi:SaveOptions(v, true),
 			Pinned = v.Pinned or false,
@@ -7726,7 +8411,7 @@ function mainapi:Save(newprofile)
 		}
 	end
 
-	writefile('aerov4/profiles/' .. game.GameId .. '.gui.txt', httpService:JSONEncode(guidata))
+	writefile('aerov4/profiles/' .. self.Place .. '.gui.txt', httpService:JSONEncode(guidata))
 	writefile('aerov4/profiles/' .. self.Profile .. self.Place .. '.txt', httpService:JSONEncode(savedata))
 end
 
@@ -7866,11 +8551,10 @@ addCorner(toolstrokebkg, UDim.new(0, 4))
 local function getAutoScale()
 	local size = gui.AbsoluteSize
 	if size.X <= 0 or size.Y <= 0 then return 1 end
-	local fit = math.min(size.X / 1920, size.Y / 1080)
 	if inputService.TouchEnabled and not inputService.KeyboardEnabled then
-		return math.clamp(fit * 1.25, 0.45, 1)
+		return math.clamp(math.min(size.X / 430, size.Y / 780), 0.75, 1)
 	end
-	return math.clamp(math.min(size.X / 1920, size.Y / 1080 * 1.35), 0.6, 2)
+	return math.clamp(math.min(size.X / 1600, size.Y / 900), 0.7, 1)
 end
 
 scale = Instance.new('UIScale')
@@ -7880,19 +8564,13 @@ mainapi.guiscale = scale
 scaledgui.Size = UDim2.fromScale(1 / scale.Scale, 1 / scale.Scale)
 
 mainapi:Clean(gui:GetPropertyChangedSignal('AbsoluteSize'):Connect(function()
-	if mainapi.Scale.Enabled then
+	if mainapi.Scale and mainapi.Scale.Enabled then
 		scale.Scale = getAutoScale()
 	end
 end))
 
 mainapi:Clean(scale:GetPropertyChangedSignal('Scale'):Connect(function()
 	scaledgui.Size = UDim2.fromScale(1 / scale.Scale, 1 / scale.Scale)
-	for _, v in scaledgui:GetDescendants() do
-		if v:IsA('GuiObject') and v.Visible then
-			v.Visible = false
-			v.Visible = true
-		end
-	end
 end))
 
 mainapi:Clean(clickgui:GetPropertyChangedSignal('Visible'):Connect(function()
@@ -7950,6 +8628,13 @@ mainapi:CreateCategory({
 	Icon = getcustomasset('aerov4/assets/new/worldicon.png'),
 	Size = UDim2.fromOffset(14, 14)
 })
+if game.GameId == 2619619496 and game.PlaceId ~= 6872265039 then
+	mainapi:CreateCategory({
+		Name = 'Kits',
+		Icon = getcustomasset('aerov4/assets/new/kiticon.png'),
+		Size = UDim2.fromOffset(15, 15)
+	})
+end
 mainapi:CreateCategory({
 	Name = 'Inventory',
 	Icon = getcustomasset('aerov4/assets/new/inventoryicon.png'),
@@ -7965,13 +8650,6 @@ mainapi:CreateCategory({
 	Icon = getcustomasset('aerov4/assets/new/legiticon.png'),
 	Size = UDim2.fromOffset(15, 15)
 })
-if game.GameId == 2619619496 and game.PlaceId ~= 6872265039 then
-	mainapi:CreateCategory({
-		Name = 'Kits',
-		Icon = getcustomasset('aerov4/assets/new/kiticon.png'),
-		Size = UDim2.fromOffset(15, 15)
-	})
-end
 mainapi.Categories.Main:CreateDivider('misc')
 
 --[[
@@ -9092,6 +9770,26 @@ mainapi.RainbowUpdateSpeed = guipane:CreateSlider({
 	Tooltip = 'Adjusts the update rate of rainbow values',
 	Suffix = 'hz'
 })
+mainapi.ColorPickerMode = guipane:CreateDropdown({
+	Name = 'Color picker',
+	List = {'Sliders', 'Custom'},
+	Tooltip = 'custom opens saturation, brightness and opacity right away and shows hex codes when u click a color'
+})
+mainapi.HalloweenTheme = guipane:CreateToggle({
+	Name = 'halloween theme',
+	Default = true,
+	Function = function(callback)
+		for _, updateWeb in halloweenWebs do
+			updateWeb()
+		end
+		for icon in halloweenIcons do
+			if icon.Parent then
+				icon.Visible = callback
+			end
+		end
+	end,
+	Tooltip = 'spooky lil decorations for ur gui'
+})
 guipane:CreateButton({
 	Name = 'Reset GUI positions',
 	Function = function()
@@ -9113,37 +9811,29 @@ end
 guipane:CreateButton({
 	Name = 'Sort GUI',
 	Function = function()
-		local priority = {
-			GUICategory = 1,
-			CombatCategory = 2,
-			BlatantCategory = 3,
-			RenderCategory = 4,
-			UtilityCategory = 5,
-			WorldCategory = 6,
-			InventoryCategory = 7,
-			MinigamesCategory = 8,
-			FriendsCategory = 9,
-			ProfilesCategory = 10
-		}
-		local categories = {}
-		for _, v in mainapi.Categories do
-			if v.Type ~= 'Overlay' then
-				table.insert(categories, v)
-			end
-		end
-		table.sort(categories, function(a, b)
-			return (priority[a.Object.Name] or 99) < (priority[b.Object.Name] or 99)
-		end)
-
+		local order = {'Main', 'Combat', 'Blatant', 'Render', 'Utility', 'World', 'Kits', 'Inventory', 'Minigames'}
 		local ind = 0
-		for _, v in categories do
-			if v.Object.Visible then
+		for _, name in order do
+			local v = mainapi.Categories[name]
+			if v and v.Object then
+				if name ~= 'Main' then
+					if not v.Object.Visible and v.Button and v.Button.Toggle then
+						pcall(function()
+							v.Button:Toggle()
+						end)
+					end
+					if not v.Expanded and v.Expand then
+						pcall(function()
+							v:Expand()
+						end)
+					end
+				end
 				v.Object.Position = UDim2.fromOffset(6 + (ind % 8 * 230), 60 + (ind > 7 and 360 or 0))
 				ind += 1
 			end
 		end
 	end,
-	Tooltip = 'Sorts GUI'
+	Tooltip = 'opens and expands all ur module categories and lines them up'
 })
 
 --[[
@@ -9166,6 +9856,11 @@ mainapi.ToggleNotifications = notifpane:CreateToggle({
 	Tooltip = 'Notifies you if a module is enabled/disabled.',
 	Default = true,
 	Darker = true
+})
+mainapi.NotificationPosition = notifpane:CreateDropdown({
+	Name = 'Position',
+	List = {'Bottom Right', 'Bottom Left', 'Top Right', 'Top Left'},
+	Tooltip = 'where notifications show up on ur screen'
 })
 
 mainapi.GUIColor = mainapi.Categories.Main:CreateGUISlider({
@@ -9385,69 +10080,199 @@ textguicolorcustom = textgui:CreateColorSlider({
 	Info HUD
 ]]
 
-local hudPing, hudFPS, hudClock, hudKeystrokes
-local hudPingLabel, hudFPSLabel, hudClockLabel, hudKeystrokesLabel
 local hudOverlay
 local hudLplr = cloneref(game:GetService('Players')).LocalPlayer
-
-local hudFrame = Instance.new('Frame')
-hudFrame.Name = 'InfoHUD'
-hudFrame.Position = UDim2.fromOffset(10, 200)
-hudFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-hudFrame.BackgroundTransparency = 0.3
-hudFrame.BorderSizePixel = 0
-hudFrame.Size = UDim2.fromOffset(130, 10)
-hudFrame.Visible = false
-hudFrame.Parent = scaledgui
-addCorner(hudFrame)
-makeDraggable(hudFrame)
-
-local hudPad = Instance.new('UIPadding')
-hudPad.PaddingLeft = UDim.new(0, 7)
-hudPad.PaddingRight = UDim.new(0, 7)
-hudPad.PaddingTop = UDim.new(0, 5)
-hudPad.PaddingBottom = UDim.new(0, 5)
-hudPad.Parent = hudFrame
-
-local hudList = Instance.new('UIListLayout')
-hudList.SortOrder = Enum.SortOrder.LayoutOrder
-hudList.Padding = UDim.new(0, 3)
-hudList.Parent = hudFrame
-
-hudList:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(function()
-	hudFrame.Size = UDim2.fromOffset(130, hudList.AbsoluteContentSize.Y + 10)
+local hudWidgets = {}
+local hudFile = 'aerov4/profiles/infohud.json'
+local hudPositions = {}
+pcall(function()
+	if isfile(hudFile) then
+		hudPositions = httpService:JSONDecode(readfile(hudFile))
+	end
 end)
+local hudSaveAt = 0
+local function saveHudPositions()
+	hudSaveAt = tick() + 0.5
+	task.delay(0.6, function()
+		if tick() < hudSaveAt then return end
+		local data = {}
+		for name, w in hudWidgets do
+			data[name] = {x = w.Frame.Position.X.Offset, y = w.Frame.Position.Y.Offset}
+		end
+		pcall(function()
+			writefile(hudFile, httpService:JSONEncode(data))
+		end)
+	end)
+end
+local hudFonts = {
+	Minecraft = Enum.Font.Arcade,
+	Gotham = Enum.Font.GothamMedium,
+	Code = Enum.Font.Code,
+	Clean = Enum.Font.SourceSansSemibold,
+	Mono = Enum.Font.RobotoMono
+}
 
-local function createHUDLabel(order)
-	local label = Instance.new('TextLabel')
-	label.Size = UDim2.new(1, 0, 0, 16)
-	label.BackgroundTransparency = 1
-	label.Text = ''
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.TextSize = 13
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.FontFace = uipallet.Font
-	label.LayoutOrder = order
-	label.Visible = false
-	label.Parent = hudFrame
-	return label
+local function makeHudWidget(name, defaultPos)
+	local frame = Instance.new('Frame')
+	frame.Name = 'HUD'..name
+	frame.BackgroundColor3 = Color3.new()
+	frame.BackgroundTransparency = 0.55
+	frame.BorderSizePixel = 0
+	frame.Size = UDim2.fromOffset(0, 0)
+	local saved = hudPositions[name]
+	frame.Position = type(saved) == 'table' and saved.x and UDim2.fromOffset(saved.x, saved.y) or defaultPos
+	frame.Visible = false
+	frame.Parent = scaledgui
+	local corner = Instance.new('UICorner')
+	corner.CornerRadius = UDim.new(0, 3)
+	corner.Parent = frame
+	local uiscale = Instance.new('UIScale')
+	uiscale.Parent = frame
+	makeDraggable(frame, clickgui)
+	frame:GetPropertyChangedSignal('Position'):Connect(saveHudPositions)
+	local w = {Frame = frame, Scale = uiscale, Name = name}
+	hudWidgets[name] = w
+	return w
 end
 
-hudPingLabel = createHUDLabel(1)
-hudFPSLabel = createHUDLabel(2)
-hudClockLabel = createHUDLabel(3)
-hudKeystrokesLabel = createHUDLabel(4)
+local function makeTextWidget(name, defaultPos)
+	local w = makeHudWidget(name, defaultPos)
+	w.Frame.AutomaticSize = Enum.AutomaticSize.XY
+	local pad = Instance.new('UIPadding')
+	pad.PaddingLeft = UDim.new(0, 9)
+	pad.PaddingRight = UDim.new(0, 7)
+	pad.PaddingTop = UDim.new(0, 5)
+	pad.PaddingBottom = UDim.new(0, 3)
+	pad.Parent = w.Frame
+	local shadow = Instance.new('TextLabel')
+	shadow.AutomaticSize = Enum.AutomaticSize.XY
+	shadow.Size = UDim2.fromOffset(0, 0)
+	shadow.Position = UDim2.fromOffset(2, 2)
+	shadow.BackgroundTransparency = 1
+	shadow.TextColor3 = Color3.fromRGB(40, 40, 40)
+	shadow.TextSize = 18
+	shadow.Text = ''
+	shadow.ZIndex = 1
+	shadow.Parent = w.Frame
+	local label = shadow:Clone()
+	label.Position = UDim2.fromOffset(0, 0)
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.ZIndex = 2
+	label.Parent = w.Frame
+	function w:SetText(text)
+		if label.Text ~= text then
+			label.Text = text
+			shadow.Text = text
+		end
+	end
+	function w:ApplyStyle(font, textColor)
+		label.FontFace = font
+		shadow.FontFace = font
+		label.TextColor3 = textColor
+		shadow.TextColor3 = textColor:Lerp(Color3.new(), 0.75)
+	end
+	return w
+end
+
+local function makeKeystrokes(defaultPos)
+	local w = makeHudWidget('Keystrokes', defaultPos)
+	w.Frame.BackgroundTransparency = 1
+	w.Frame.Size = UDim2.fromOffset(108, 130)
+	w.Keys = {}
+	local layout = {
+		{id = 'W', text = 'W', x = 37, y = 0, w = 34, h = 34},
+		{id = 'A', text = 'A', x = 0, y = 37, w = 34, h = 34},
+		{id = 'S', text = 'S', x = 37, y = 37, w = 34, h = 34},
+		{id = 'D', text = 'D', x = 74, y = 37, w = 34, h = 34},
+		{id = 'LMB', text = 'LMB', x = 0, y = 74, w = 52, h = 34, cps = true},
+		{id = 'RMB', text = 'RMB', x = 56, y = 74, w = 52, h = 34, cps = true},
+		{id = 'Space', text = '', x = 0, y = 111, w = 108, h = 19, bar = true}
+	}
+	for _, info in layout do
+		local key = Instance.new('Frame')
+		key.Name = info.id
+		key.Position = UDim2.fromOffset(info.x, info.y)
+		key.Size = UDim2.fromOffset(info.w, info.h)
+		key.BackgroundColor3 = Color3.new()
+		key.BackgroundTransparency = 0.55
+		key.BorderSizePixel = 0
+		key.Parent = w.Frame
+		local keyCorner = Instance.new('UICorner')
+		keyCorner.CornerRadius = UDim.new(0, 3)
+		keyCorner.Parent = key
+		local label = Instance.new('TextLabel')
+		label.Size = UDim2.new(1, 0, info.cps and 0.62 or 1, 0)
+		label.BackgroundTransparency = 1
+		label.Text = info.text
+		label.TextColor3 = Color3.new(1, 1, 1)
+		label.TextSize = info.cps and 15 or 18
+		label.Parent = key
+		local sub
+		if info.cps then
+			sub = label:Clone()
+			sub.Size = UDim2.new(1, 0, 0.38, 0)
+			sub.Position = UDim2.new(0, 0, 0.6, 0)
+			sub.TextSize = 10
+			sub.Text = '0 CPS'
+			sub.Parent = key
+		end
+		local bar
+		if info.bar then
+			bar = Instance.new('Frame')
+			bar.AnchorPoint = Vector2.new(0.5, 0.5)
+			bar.Position = UDim2.fromScale(0.5, 0.5)
+			bar.Size = UDim2.new(0.5, 0, 0, 2)
+			bar.BorderSizePixel = 0
+			bar.BackgroundColor3 = Color3.new(1, 1, 1)
+			bar.Parent = key
+		end
+		w.Keys[info.id] = {Frame = key, Label = label, Sub = sub, Bar = bar, Pressed = false}
+	end
+	function w:ApplyStyle(font, textColor, bgColor, bgTrans)
+		self.KeyTextColor, self.BgColor, self.BgTrans = textColor, bgColor, bgTrans
+		for _, k in self.Keys do
+			k.Label.FontFace = font
+			if k.Sub then
+				k.Sub.FontFace = font
+			end
+			k.Pressed = nil
+		end
+	end
+	return w
+end
+
+local hudPing = makeTextWidget('Ping', UDim2.fromOffset(10, 200))
+local hudFPS = makeTextWidget('FPS', UDim2.fromOffset(10, 232))
+local hudClock = makeTextWidget('Clock', UDim2.fromOffset(10, 264))
+local hudKeys = makeKeystrokes(UDim2.fromOffset(10, 300))
+
+local function refreshWidget(w)
+	if not w.Toggle then return end
+	local on = w.Toggle.Enabled
+	w.Frame.Visible = on
+	for _, opt in {w.FontOpt, w.TextColor, w.BgColorOpt, w.ClearBg, w.SizeOpt} do
+		if opt and opt.Object then
+			opt.Object.Visible = on
+		end
+	end
+	local font = Font.fromEnum(hudFonts[w.FontOpt.Value] or Enum.Font.Arcade)
+	local textColor = Color3.fromHSV(w.TextColor.Hue, w.TextColor.Sat, w.TextColor.Value)
+	local bgColor = Color3.fromHSV(w.BgColorOpt.Hue, w.BgColorOpt.Sat, w.BgColorOpt.Value)
+	local bgTrans = w.ClearBg.Enabled and 1 or (1 - (w.BgColorOpt.Opacity or 0.45))
+	w.Scale.Scale = w.SizeOpt.Value / 100
+	if w.Keys then
+		w.Frame.BackgroundTransparency = 1
+	else
+		w.Frame.BackgroundColor3 = bgColor
+		w.Frame.BackgroundTransparency = bgTrans
+	end
+	w:ApplyStyle(font, textColor, bgColor, bgTrans)
+end
 
 local function refreshHUD()
-	local anyOn = (hudPing and hudPing.Enabled)
-		or (hudFPS and hudFPS.Enabled)
-		or (hudClock and hudClock.Enabled)
-		or (hudKeystrokes and hudKeystrokes.Enabled)
-	hudFrame.Visible = hudOverlay and hudOverlay.Button.Enabled and anyOn or false
-	if hudPingLabel then hudPingLabel.Visible = hudPing and hudPing.Enabled or false end
-	if hudFPSLabel then hudFPSLabel.Visible = hudFPS and hudFPS.Enabled or false end
-	if hudClockLabel then hudClockLabel.Visible = hudClock and hudClock.Enabled or false end
-	if hudKeystrokesLabel then hudKeystrokesLabel.Visible = hudKeystrokes and hudKeystrokes.Enabled or false end
+	for _, w in hudWidgets do
+		refreshWidget(w)
+	end
 end
 
 hudOverlay = mainapi:CreateOverlay({
@@ -9460,54 +10285,107 @@ hudOverlay = mainapi:CreateOverlay({
 	end
 })
 
-hudPing = hudOverlay:CreateToggle({
-	Name = 'Ping',
-	Tooltip = 'Shows your ping in ms',
-	Function = function() refreshHUD() end
-})
-hudFPS = hudOverlay:CreateToggle({
-	Name = 'FPS',
-	Tooltip = 'Shows your current FPS',
-	Function = function() refreshHUD() end
-})
-hudClock = hudOverlay:CreateToggle({
-	Name = 'Clock',
-	Tooltip = 'Shows the current time',
-	Function = function() refreshHUD() end
-})
-hudKeystrokes = hudOverlay:CreateToggle({
-	Name = 'Keystrokes',
-	Tooltip = 'Shows keys you are currently holding',
-	Function = function() refreshHUD() end
-})
+local function addWidgetOptions(w, tooltip)
+	local name = w.Name
+	w.Toggle = hudOverlay:CreateToggle({
+		Name = name,
+		Tooltip = tooltip,
+		Function = function()
+			refreshWidget(w)
+		end
+	})
+	w.FontOpt = hudOverlay:CreateDropdown({
+		Name = name..' font',
+		List = {'Minecraft', 'Gotham', 'Code', 'Clean', 'Mono'},
+		Darker = true,
+		Function = function()
+			refreshWidget(w)
+		end
+	})
+	w.TextColor = hudOverlay:CreateColorSlider({
+		Name = name..' text color',
+		DefaultHue = 0,
+		DefaultSat = 0,
+		DefaultValue = 1,
+		Darker = true,
+		Function = function()
+			refreshWidget(w)
+		end
+	})
+	w.BgColorOpt = hudOverlay:CreateColorSlider({
+		Name = name..' background',
+		DefaultHue = 0,
+		DefaultSat = 0,
+		DefaultValue = 0,
+		DefaultOpacity = 0.45,
+		Darker = true,
+		Function = function()
+			refreshWidget(w)
+		end
+	})
+	w.ClearBg = hudOverlay:CreateToggle({
+		Name = name..' no background',
+		Darker = true,
+		Function = function()
+			refreshWidget(w)
+		end
+	})
+	w.SizeOpt = hudOverlay:CreateSlider({
+		Name = name..' size',
+		Min = 50,
+		Max = 250,
+		Default = 100,
+		Suffix = '%',
+		Darker = true,
+		Function = function()
+			refreshWidget(w)
+		end
+	})
+	refreshWidget(w)
+end
+
+addWidgetOptions(hudPing, 'shows ur ping')
+addWidgetOptions(hudFPS, 'shows ur fps')
+addWidgetOptions(hudClock, 'shows the time')
+addWidgetOptions(hudKeys, 'lunar style keystrokes with cps')
+
+local keyMap = {
+	[Enum.KeyCode.W] = 'W',
+	[Enum.KeyCode.A] = 'A',
+	[Enum.KeyCode.S] = 'S',
+	[Enum.KeyCode.D] = 'D',
+	[Enum.KeyCode.Space] = 'Space'
+}
+local held = {}
+local clicks = {LMB = {}, RMB = {}}
+mainapi:Clean(inputService.InputBegan:Connect(function(inputObj)
+	local id = keyMap[inputObj.KeyCode]
+	if inputObj.UserInputType == Enum.UserInputType.MouseButton1 then
+		id = 'LMB'
+	elseif inputObj.UserInputType == Enum.UserInputType.MouseButton2 then
+		id = 'RMB'
+	end
+	if id then
+		held[id] = true
+		if clicks[id] then
+			table.insert(clicks[id], tick())
+		end
+	end
+end))
+mainapi:Clean(inputService.InputEnded:Connect(function(inputObj)
+	local id = keyMap[inputObj.KeyCode]
+	if inputObj.UserInputType == Enum.UserInputType.MouseButton1 then
+		id = 'LMB'
+	elseif inputObj.UserInputType == Enum.UserInputType.MouseButton2 then
+		id = 'RMB'
+	end
+	if id then
+		held[id] = nil
+	end
+end))
 
 local fpsFrames, fpsCurrent, fpsTimer = 0, 0, tick()
-local activeKeys = {}
-
-mainapi:Clean(inputService.InputBegan:Connect(function(inputObj)
-	if not (hudKeystrokes and hudKeystrokes.Enabled) then return end
-	if inputObj.UserInputType == Enum.UserInputType.Keyboard then
-		local name = inputObj.KeyCode.Name
-		if #name <= 10 then activeKeys[name] = true end
-	elseif inputObj.UserInputType == Enum.UserInputType.MouseButton1 then
-		activeKeys['LMB'] = true
-	elseif inputObj.UserInputType == Enum.UserInputType.MouseButton2 then
-		activeKeys['RMB'] = true
-	end
-end))
-
-mainapi:Clean(inputService.InputEnded:Connect(function(inputObj)
-	if inputObj.UserInputType == Enum.UserInputType.Keyboard then
-		activeKeys[inputObj.KeyCode.Name] = nil
-	elseif inputObj.UserInputType == Enum.UserInputType.MouseButton1 then
-		activeKeys['LMB'] = nil
-	elseif inputObj.UserInputType == Enum.UserInputType.MouseButton2 then
-		activeKeys['RMB'] = nil
-	end
-end))
-
 local hudSlowTimer = 0
-local hudLastFPS, hudLastPing, hudLastClock, hudLastKeys
 mainapi:Clean(runService.Heartbeat:Connect(function()
 	fpsFrames += 1
 	local now = tick()
@@ -9517,42 +10395,66 @@ mainapi:Clean(runService.Heartbeat:Connect(function()
 		fpsTimer = now
 	end
 
-	if not hudFrame.Visible then return end
-
-	if hudFPS and hudFPS.Enabled and hudLastFPS ~= fpsCurrent then
-		hudLastFPS = fpsCurrent
-		hudFPSLabel.Text = 'FPS  '..fpsCurrent
-	end
-	if hudKeystrokes and hudKeystrokes.Enabled then
-		local keys = {}
-		for k in activeKeys do table.insert(keys, k) end
-		local val = #keys > 0 and table.concat(keys, ' + ') or 'Keys  --'
-		if hudLastKeys ~= val then
-			hudLastKeys = val
-			hudKeystrokesLabel.Text = val
+	if hudKeys.Frame.Visible and hudKeys.KeyTextColor then
+		local touchMove = {}
+		if inputService.TouchEnabled then
+			local char = hudLplr.Character
+			local hum = char and char:FindFirstChildOfClass('Humanoid')
+			local cam = workspace.CurrentCamera
+			if hum and cam and hum.MoveDirection.Magnitude > 0.1 then
+				local look = cam.CFrame.LookVector * Vector3.new(1, 0, 1)
+				local right = cam.CFrame.RightVector * Vector3.new(1, 0, 1)
+				local dir = hum.MoveDirection
+				if look.Magnitude > 0 and right.Magnitude > 0 then
+					local f, r = dir:Dot(look.Unit), dir:Dot(right.Unit)
+					touchMove.W, touchMove.S, touchMove.D, touchMove.A = f > 0.4, f < -0.4, r > 0.4, r < -0.4
+				end
+				touchMove.Space = hum.Jump
+			end
+		end
+		for id, k in hudKeys.Keys do
+			local pressed = (held[id] or touchMove[id]) and true or false
+			if k.Pressed ~= pressed then
+				k.Pressed = pressed
+				local bg = pressed and hudKeys.KeyTextColor or hudKeys.BgColor
+				local fg = pressed and hudKeys.BgColor or hudKeys.KeyTextColor
+				local trans = pressed and 0.15 or hudKeys.BgTrans
+				tweenService:Create(k.Frame, TweenInfo.new(0.07), {BackgroundColor3 = bg, BackgroundTransparency = trans}):Play()
+				k.Label.TextColor3 = fg
+				if k.Sub then
+					k.Sub.TextColor3 = fg
+				end
+				if k.Bar then
+					k.Bar.BackgroundColor3 = fg
+				end
+			end
+			if k.Sub and clicks[id] then
+				local list = clicks[id]
+				while list[1] and now - list[1] > 1 do
+					table.remove(list, 1)
+				end
+				local text = #list..' CPS'
+				if k.Sub.Text ~= text then
+					k.Sub.Text = text
+				end
+			end
 		end
 	end
 
-	if now - hudSlowTimer < 0.5 then return end
+	if now - hudSlowTimer < 0.25 then return end
 	hudSlowTimer = now
-
-	if hudPing and hudPing.Enabled then
+	if hudFPS.Frame.Visible then
+		hudFPS:SetText(fpsCurrent..' FPS')
+	end
+	if hudPing.Frame.Visible then
 		local ok, ping = pcall(function()
 			return math.round(hudLplr:GetNetworkPing() * 1000)
 		end)
-		local val = ok and ping or '--'
-		if hudLastPing ~= val then
-			hudLastPing = val
-			hudPingLabel.Text = 'Ping  '..val..'ms'
-		end
+		hudPing:SetText((ok and ping or '--')..' ms')
 	end
-	if hudClock and hudClock.Enabled then
+	if hudClock.Frame.Visible then
 		local ok, t = pcall(os.date, '%I:%M %p')
-		local val = ok and t or '--:--'
-		if hudLastClock ~= val then
-			hudLastClock = val
-			hudClockLabel.Text = 'Time  '..val
-		end
+		hudClock:SetText(ok and t or '--:--')
 	end
 end))
 
@@ -9985,7 +10887,7 @@ function mainapi:RebuildTextGUI()
 				holdertext.Position = UDim2.fromOffset(right and 3 or 6, 2)
 				holdertext.BackgroundTransparency = 1
 				holdertext.BorderSizePixel = 0
-				holdertext.Text = i..(v.ExtraText and " <font color='#A8A8A8'>"..v.ExtraText()..'</font>' or '')
+				holdertext.Text = (v.ExtraText and "<font color='#E6E6E6'><b>"..v.ExtraText().."</b></font> " or '')..i
 				holdertext.TextSize = 15
 				holdertext.FontFace = textguifont.Value
 				holdertext.RichText = true
