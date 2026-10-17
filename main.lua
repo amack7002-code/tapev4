@@ -68,6 +68,20 @@ local playersService = cloneref(game:GetService('Players'))
 local httpService = cloneref(game:GetService('HttpService'))
 local teleportService = cloneref(game:GetService('TeleportService'))
 
+local function ensureParentFolders(path)
+	local current = ''
+	local parts = path:gsub('\\', '/'):split('/')
+	for i = 1, #parts - 1 do
+		local part = parts[i]
+		if part ~= '' then
+			current = current == '' and part or (current .. '/' .. part)
+			if not isfolder(current) then
+				makefolder(current)
+			end
+		end
+	end
+end
+
 local function downloadFile(path, func, repositoryPath)
 	if not isfile(path) then
 		local res
@@ -90,9 +104,212 @@ local function downloadFile(path, func, repositoryPath)
 		if path:find('%.lua') then
 			res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n' .. res
 		end
+		ensureParentFolders(path)
 		writefile(path, res)
 	end
 	return (func or readfile)(path)
+end
+
+local WATERMARK_PREFIX = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'
+
+local function stripWatermark(src)
+	if src:sub(1, #WATERMARK_PREFIX) == WATERMARK_PREFIX then
+		return src:sub(#WATERMARK_PREFIX + 1)
+	end
+	return src
+end
+
+local function fetchOptionalFile(localPath, repositoryPath)
+	if isfile(localPath) then
+		return readfile(localPath)
+	end
+	if shared.VapeDeveloper then
+		return nil
+	end
+	repositoryPath = repositoryPath or select(1, localPath:gsub('^aerov4/', ''))
+	for attempt = 1, 3 do
+		local suc, result = pcall(function()
+			return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/' .. readfile('aerov4/profiles/commit.txt') .. '/' .. repositoryPath, true)
+		end)
+		if suc and type(result) == 'string' and result ~= '' then
+			if result == '404: Not Found' or result:find('^404:') then
+				return nil
+			end
+			if localPath:find('%.lua$') then
+				result = WATERMARK_PREFIX .. result
+			end
+			ensureParentFolders(localPath)
+			writefile(localPath, result)
+			return result
+		end
+		task.wait(1)
+	end
+	return nil
+end
+
+local function compileGameSource(gameSrc, label, moduleEntries)
+	local gameFunc, gameErr = loadstring(gameSrc, tostring(label))
+	if gameFunc then
+		return gameFunc
+	end
+
+	local ls = gameSrc:split('\n')
+	local msg = gameErr and tostring(gameErr) or 'executor didnt say why'
+	local n = tonumber(msg:match(':(%d+):'))
+	local where = ''
+	if moduleEntries then
+		for _, entry in ipairs(moduleEntries) do
+			local modFunc, modErr = loadstring(entry.source, entry.path)
+			if not modFunc then
+				where = '\nbroken module is ' .. entry.path .. ': ' .. tostring(modErr)
+				break
+			end
+		end
+	end
+	if where == '' and not n then
+		local starts = {1}
+		for i = 2, #ls do
+			if ls[i]:match('^run%(function%(%)') then
+				table.insert(starts, i)
+			end
+		end
+		for idx, s in starts do
+			local e = (starts[idx + 1] or (#ls + 1)) - 1
+			if not loadstring(table.concat(ls, '\n', s, e), 'check') then
+				local name
+				for i = s, e do
+					name = ls[i]:match("Name = '([^']+)'")
+					if name then break end
+				end
+				where = '\nbroken part is lines ' .. s .. ' to ' .. e .. (name and ' in ' .. name or '')
+				break
+			end
+		end
+		if where == '' then
+			where = '\ncouldnt find the broken part, prob a missing end between 2 modules'
+		end
+	end
+	local ctx = ''
+	if n then
+		local parts = {}
+		for i = math.max(1, n - 3), math.min(#ls, n + 3) do
+			table.insert(parts, (i == n and '>>> ' or '    ') .. i .. ': ' .. (ls[i] or ''):gsub('\r', ''))
+		end
+		ctx = '\n\naround here:\n' .. table.concat(parts, '\n')
+	end
+	error('[aerov4] syntax error in ' .. tostring(label) .. '\n' .. msg .. where .. ctx)
+end
+
+local function loadGameModules(gameId, ...)
+	local gameFolder = 'aerov4/games/' .. tostring(gameId)
+	local repoFolder = 'games/' .. tostring(gameId)
+	local orderJson = fetchOptionalFile(gameFolder .. '/module-order.json', repoFolder .. '/module-order.json')
+
+	if not orderJson and isfolder(gameFolder) and isfile(gameFolder .. '/base.lua') then
+		local baseCheck = readfile(gameFolder .. '/base.lua')
+		local discovered = {}
+		for _, sub in ipairs(listfiles(gameFolder)) do
+			if isfolder(sub) then
+				for _, modFile in ipairs(listfiles(sub)) do
+					local rel = modFile:gsub('\\', '/'):match('^' .. gameFolder .. '/(.+%.lua)$')
+					if rel and rel ~= 'base.lua' and rel ~= 'main.lua' then
+						table.insert(discovered, rel)
+					end
+				end
+			end
+		end
+		table.sort(discovered)
+		local markerCount = 0
+		for _ in baseCheck:gmatch('%-%-%[%[AEROV4_GAME_MODULE_%d+%]%]') do
+			markerCount += 1
+		end
+		if #discovered > 0 and #discovered == markerCount then
+			orderJson = httpService:JSONEncode(discovered)
+		end
+	end
+
+	if orderJson then
+		local ok, moduleOrder = pcall(function()
+			return httpService:JSONDecode(orderJson)
+		end)
+		if ok and type(moduleOrder) == 'table' then
+			local baseSource = downloadFile(gameFolder .. '/base.lua', nil, repoFolder .. '/base.lua')
+			local missingFiles = {}
+			for _, relPath in ipairs(moduleOrder) do
+				local localModPath = gameFolder .. '/' .. relPath
+				if not isfile(localModPath) then
+					table.insert(missingFiles, {
+						localPath = localModPath,
+						repoPath = repoFolder .. '/' .. relPath
+					})
+				end
+			end
+
+			if #missingFiles > 0 then
+				local remaining = #missingFiles
+				local downloadErr = nil
+				local doneEvent = Instance.new('BindableEvent')
+				for _, item in ipairs(missingFiles) do
+					task.spawn(function()
+						local suc, err = pcall(downloadFile, item.localPath, nil, item.repoPath)
+						if not suc and not downloadErr then
+							downloadErr = err
+						end
+						remaining -= 1
+						if remaining == 0 then
+							doneEvent:Fire()
+						end
+					end)
+				end
+				if remaining > 0 then
+					doneEvent.Event:Wait()
+				end
+				doneEvent:Destroy()
+				if downloadErr then
+					error(downloadErr)
+				end
+			end
+
+			local assembled = baseSource
+			local moduleEntries = {}
+			for idx, relPath in ipairs(moduleOrder) do
+				local localModPath = gameFolder .. '/' .. relPath
+				local modSource = stripWatermark(readfile(localModPath))
+				table.insert(moduleEntries, {
+					path = repoFolder .. '/' .. relPath,
+					source = modSource
+				})
+				local marker = string.format('--[[AEROV4_GAME_MODULE_%03d]]', idx)
+				local startPos, endPos = assembled:find(marker, 1, true)
+				if startPos then
+					assembled = assembled:sub(1, startPos - 1) .. modSource .. assembled:sub(endPos + 1)
+				else
+					assembled = assembled .. '\n' .. modSource
+				end
+			end
+
+			local chunk = compileGameSource(assembled, repoFolder .. '/base.lua', moduleEntries)
+			return chunk(...)
+		end
+	end
+
+	local legacyFile = 'aerov4/games/' .. tostring(gameId) .. '.lua'
+	local mainFile = gameFolder .. '/main.lua'
+	local repoMain = repoFolder .. '/main.lua'
+
+	if isfile(mainFile) then
+		local chunk = compileGameSource(readfile(mainFile), repoMain)
+		return chunk(...)
+	elseif isfile(legacyFile) then
+		local chunk = compileGameSource(readfile(legacyFile), repoMain)
+		return chunk(...)
+	else
+		local src = fetchOptionalFile(mainFile, repoMain) or fetchOptionalFile(legacyFile, 'games/' .. tostring(gameId) .. '.lua')
+		if src then
+			local chunk = compileGameSource(src, repoMain)
+			return chunk(...)
+		end
+	end
 end
 
 local function migrateProfiles()
@@ -258,70 +475,9 @@ if getgenv().Closet then
 end
 
 if not shared.VapeIndependent then
-	loadstring(downloadFile('aerov4/games/universal.lua', nil, 'games/universal/main.lua'), 'universal')()
+	loadGameModules('universal')
 	local gameFileId = (game.GameId == 2619619496) and (game.PlaceId == 6872265039 and 6872265039 or 6872274481) or (game.GameId == 10516888336 and 10516888336 or game.PlaceId)
-	local gameRepositoryPath = 'games/' .. gameFileId .. '/main.lua'
-
-	if isfile('aerov4/games/' .. gameFileId .. '.lua') then
-		local gameSrc = downloadFile('aerov4/games/' .. gameFileId .. '.lua', nil, gameRepositoryPath)
-		local gameFunc, gameErr = loadstring(gameSrc, tostring(gameFileId))
-		if not gameFunc then
-			local ls = gameSrc:split('\n')
-			local msg = gameErr and tostring(gameErr) or 'executor didnt say why'
-			local n = tonumber(msg:match(':(%d+):'))
-			local where = ''
-			if not n then
-				local starts = {1}
-				for i = 2, #ls do
-					if ls[i]:match('^run%(function%(%)') then
-						table.insert(starts, i)
-					end
-				end
-				for idx, s in starts do
-					local e = (starts[idx + 1] or (#ls + 1)) - 1
-					if not loadstring(table.concat(ls, '\n', s, e), 'check') then
-						local name
-						for i = s, e do
-							name = ls[i]:match("Name = '([^']+)'")
-							if name then break end
-						end
-						where = '\nbroken part is lines ' .. s .. ' to ' .. e .. (name and ' in ' .. name or '')
-						break
-					end
-				end
-				if where == '' then
-					where = '\ncouldnt find the broken part, prob a missing end between 2 modules'
-				end
-			end
-			local ctx = ''
-			if n then
-				local parts = {}
-				for i = math.max(1, n - 3), math.min(#ls, n + 3) do
-					table.insert(parts, (i == n and '>>> ' or '    ') .. i .. ': ' .. (ls[i] or ''):gsub('\r', ''))
-				end
-				ctx = '\n\naround here:\n' .. table.concat(parts, '\n')
-			end
-			error('[aerov4] syntax error in ' .. gameRepositoryPath .. '\n' .. msg .. where .. ctx)
-		end
-		gameFunc(...)
-	else
-		if not shared.VapeDeveloper then
-			local suc, res = pcall(function()
-				return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/' .. readfile('aerov4/profiles/commit.txt') .. '/' .. gameRepositoryPath, true)
-			end)
-			if suc and res and res ~= '404: Not Found' then
-				local path = 'aerov4/games/' .. gameFileId .. '.lua'
-				if not isfile(path) then
-					writefile(path, '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n' .. res)
-				end
-				local gameChunk, gameChunkErr = loadstring(readfile(path), tostring(gameFileId))
-				if not gameChunk then
-					error('[aerov4] failed to compile downloaded game script ' .. gameFileId .. ': ' .. tostring(gameChunkErr))
-				end
-				gameChunk(...)
-			end
-		end
-	end
+	loadGameModules(gameFileId, ...)
 	finishLoading()
 else
 	vape.Init = finishLoading

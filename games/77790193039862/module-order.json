@@ -1,0 +1,17 @@
+[
+  "Blatent/AutooBlock.lua",
+  "Blatent/fly.lua",
+  "Blatent/highJump.lua",
+  "Blatent/hitboxes.lua",
+  "Blatent/killaura.lua",
+  "Blatent/longJump.lua",
+  "Blatent/noSlow.lua",
+  "Blatent/speed.lua",
+  "Blatent/spider.lua",
+  "Combat/autoclicker.lua",
+  "Combat/reach.lua",
+  "Combat/sprint.lua",
+  "Combat/velocity.lua",
+  "World/fastbreak.lua",
+  "World/fastPlace.lua"
+]

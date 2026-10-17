@@ -1,18 +1,26 @@
 local AutoClicker
 local CPS
 local Thread
+local mouseDown = false
 
 run(function()
-local function AutoClick()
+local function stopClicking()
+	mouseDown = false
 	if Thread then
 		task.cancel(Thread)
+		Thread = nil
 	end
+end
 
-	Thread = task.delay(1 / CPS.GetRandomValue(), function()
-		repeat
+local function AutoClick()
+	if Thread then return end
+	Thread = task.spawn(function()
+		task.wait(1 / CPS.GetRandomValue())
+		while AutoClicker.Enabled and mouseDown do
 			task.spawn(arena.Client.startHit)
 			task.wait(1 / CPS.GetRandomValue())
-		until not AutoClicker.Enabled
+		end
+		Thread = nil
 	end)
 end
 
@@ -20,23 +28,21 @@ AutoClicker = vape.Categories.Combat:CreateModule({
 	Name = 'AutoClicker',
 	Function = function(callback)
 		if callback then
-			AutoClicker:Clean(inputService.InputBegan:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			mouseDown = false
+			AutoClicker:Clean(inputService.InputBegan:Connect(function(input, gameProcessed)
+				if not gameProcessed and input.UserInputType == Enum.UserInputType.MouseButton1 then
+					mouseDown = true
 					AutoClick()
 				end
 			end))
 
 			AutoClicker:Clean(inputService.InputEnded:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1 and Thread then
-					task.cancel(Thread)
-					Thread = nil
+				if input.UserInputType == Enum.UserInputType.MouseButton1 then
+					stopClicking()
 				end
 			end))
 		else
-			if Thread then
-				task.cancel(Thread)
-				Thread = nil
-			end
+			stopClicking()
 		end
 	end,
 	Tooltip = 'Hold attack button to automatically click'

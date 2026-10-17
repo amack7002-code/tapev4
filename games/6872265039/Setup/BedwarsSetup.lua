@@ -50,6 +50,11 @@ run(function()
 		EmoteType = require(replicatedStorage.TS.locker.emote['emote-type']).EmoteType,
 		GameAnimationUtil = require(replicatedStorage.TS.animation['animation-util']).GameAnimationUtil,
 		NotificationController = Flamework.resolveDependency('@easy-games/game-core:client/controllers/notification-controller@NotificationController'),
+        MilestoneRewards = require(replicatedStorage.TS.milestones.milestones).MilestoneRewards,
+        ModerationApp = require(lplr.PlayerScripts.TS.controllers.global["match-history"].ui["match-history-moderation-app"]).MatchHistoryModerationApp,
+        AchievementUtil = require(replicatedStorage.TS.achievement["achievement-util"]).AchievementUtil,
+        CrateItemMeta = debug.getupvalue(Flamework.resolveDependency("client/controllers/global/reward-crate/crate-controller@CrateController").onStart, 3),
+
 		getIcon = function(item, showinv)
 			local itemmeta = bedwars.ItemMeta[item.itemType]
 			return itemmeta and showinv and itemmeta.image or ''

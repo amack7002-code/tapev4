@@ -1,5 +1,3 @@
-local Fly
-local LongJump
 run(function()
 	local Keys
 	local Value

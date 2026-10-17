@@ -15,11 +15,12 @@ HitBoxes = vape.Categories.Blatant:CreateModule({
 						if not Targets.Players.Enabled and v.Player then continue end
 						if not Targets.NPCs.Enabled and v.NPC then continue end
 						local part = v.Hitbox
-						if not modified[part] then
-							modified[part] = part.Size
+						if part and part:IsA('BasePart') then
+							if not modified[part] then
+								modified[part] = part.Size
+							end
+							part.Size = modified[part] + Vector3.new(Expand.Value, Expand.Value, Expand.Value)
 						end
-
-						part.Size = modified[part] + Vector3.new(Expand.Value, Expand.Value, Expand.Value)
 					end
 				end
 

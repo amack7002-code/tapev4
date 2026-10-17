@@ -21,5 +21,6 @@
   "Utility/RegionLock.lua",
   "Render/StreamerMode.lua",
   "Blatant/Speed.lua",
-  "Render/NametagSpoof.lua"
+  "Render/NametagSpoof.lua",
+  "Utility/ClaimRewards.lua"
 ]

@@ -18,7 +18,9 @@ run(function()
 	local OldGet, OldBreak = Client.Get
 
 	local rakNet = false
-	--[[AEROV4_NESTED_MODULE_001]]
+	run(function()
+		rakNet = typeof(raknet) == 'table'
+	end)
 
 	bedwars = setmetatable({
 		RankMeta = require(replicatedStorage.TS.rank['rank-meta']).RankMeta,
