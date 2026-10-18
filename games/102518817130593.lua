@@ -1,3 +1,4 @@
+--1.8 PvP club
 local run = function(func) func() end
 local cloneref = cloneref or function(obj) return obj end
 local playersService = cloneref(game:GetService('Players'))
@@ -30,7 +31,7 @@ local Block = MinecraftCombat:WaitForChild("Block")
 local Sprint = MinecraftCombat:WaitForChild("Sprint")
 local Feedback = MinecraftCombat:WaitForChild("Feedback")
 local Swing = MinecraftCombat:WaitForChild("Swing")
-local PlrBody = lplr.MinecraftBody
+--local PlrBody = lplr.MinecraftBody
 
 local function notif(...) return
 	vape:CreateNotification(...)
