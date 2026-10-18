@@ -4810,13 +4810,14 @@ run(function()
 	}
 
 	local loop
+	local originalImages = setmetatable({}, {__mode = 'k'})
 
 	local function findNametag(char)
 		local head = char:FindFirstChild("Head")
 		if not head then return nil end
 
 		for _, gui in ipairs(CollectionService:GetTagged("EntityNameTag")) do
-			if gui:IsA("BillboardGui") and (gui.Adornee == head or gui:IsDescendantOf(char)) then
+			if gui:IsA("BillboardGui") and gui.Name ~= "NSSpoofGui" and (gui.Adornee == head or gui:IsDescendantOf(char)) then
 				return gui
 			end
 		end
@@ -4841,10 +4842,11 @@ run(function()
 		local head = char:WaitForChild("Head", 5)
 		if not head then return end
 
-		local original = waitForNametag(char)
-		if not original then return end
 		local old = head:FindFirstChild("NSSpoofGui")
 		if old then old:Destroy() end
+
+		local original = waitForNametag(char)
+		if not original then return end
 		local clone = original:Clone()
 		clone.Name = "NSSpoofGui"
 		clone.Adornee = head
@@ -4860,8 +4862,13 @@ run(function()
 
 		for _, d in ipairs(spoof:GetDescendants()) do
 			if d:IsA("ImageLabel") then
+				local orig = originalImages[d]
+				if not orig then
+					orig = d.Image
+					originalImages[d] = orig
+				end
 				for _, rankKey in pairs(RANK_MAP) do
-					if d.Image == BedwarsImageId[rankKey] then
+					if orig == BedwarsImageId[rankKey] then
 						d.Image = BedwarsImageId[RANK_MAP[SpoofRankDropdown.Value]]
 					end
 				end
@@ -4882,6 +4889,9 @@ run(function()
 				local spoof = head:FindFirstChild("NSSpoofGui")
 				if spoof then
 					updateRank(spoof)
+				elseif NametagSpoof.Enabled then
+					spoof = applySpoof(char)
+					if spoof then updateRank(spoof) end
 				end
 			end
 		end)
