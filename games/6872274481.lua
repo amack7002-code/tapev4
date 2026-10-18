@@ -27139,24 +27139,58 @@ end)
 	Kits Modules
 ]]
 
+
 run(function()
     local InfKrystal
     local UPDATE_INTERVAL = 0.016
     local lastUpdateTime = 0
     local renderStepName = 'InfiniteKrystalMovement'
+    local originalKit
+
+    local equipKit = ReplicatedStorage
+        .rbxts_include.node_modules["@rbxts"]
+        .net.out._NetManaged.BedwarsActivateKit
 
     InfKrystal = vape.Categories.Kits:CreateModule({
         Name = 'InfKrystal/AC Disabler',
         Tooltip = 'Infinite Krystal movement + AC Disabler -- made by crobo',
+
         Function = function(callback)
             if callback then
                 lastUpdateTime = 0
+                originalKit = store.equippedKit
+
+                runService:UnbindFromRenderStep(renderStepName)
+
+                if originalKit ~= "glacial_skater" then
+                    local ok, err = pcall(function()
+                        equipKit:InvokeServer({
+                            kit = "glacial_skater"
+                        })
+                    end)
+
+                    if not ok then
+                        warn("Failed to equip krystal:", err)
+                    end
+                end
+
+                if originalKit and originalKit ~= "glacial_skater" then
+                    local ok, err = pcall(function()
+                        equipKit:InvokeServer({
+                            kit = tostring(originalKit)
+                        })
+                    end)
+
+                    if not ok then
+                        warn("Failed to restore original kit:", err)
+                    end
+                end
 
                 runService:BindToRenderStep(
                     renderStepName,
                     Enum.RenderPriority.Character.Value + 2,
                     function()
-                        local currentTime = tick()
+                        local currentTime = os.clock()
 
                         if currentTime - lastUpdateTime < UPDATE_INTERVAL then
                             return
@@ -27164,21 +27198,36 @@ run(function()
 
                         lastUpdateTime = currentTime
 
-                        pcall(function()
-                            bedwars.GlacialSkaterController:updateMomentum(100, "newValue")
+                        local controller = bedwars.GlacialSkaterController
+                        if not controller then
+                            return
+                        end
+
+                        local ok, err = pcall(function()
+                            controller:updateMomentum(100, "newValue")
                         end)
+
+                        if not ok then
+                            warn("Glacial Skater momentum update failed:", err)
+                        end
                     end
                 )
             else
                 runService:UnbindFromRenderStep(renderStepName)
 
                 pcall(function()
-                    bedwars.GlacialSkaterController:updateMomentum(0, "newValue")
+                    if bedwars.GlacialSkaterController then
+                        bedwars.GlacialSkaterController:updateMomentum(
+                            0,
+                            "newValue"
+                        )
+                    end
                 end)
             end
         end
     })
 end)
+
 
 run(function()
     local DronePhase
