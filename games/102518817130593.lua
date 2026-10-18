@@ -37,7 +37,7 @@ local function notif(...) return
 	vape:CreateNotification(...)
 end
 
-for _, v in {'PlayerModel','AimAssist', 'Search', 'Waypoints', 'Disabler', 'MurderMystery', 'SilentAim', 'Gravity', 'Parkour', 'LongJump', 'HitBoxes', "AutoClicker"} do
+for _, v in {'PlayerModel','AimAssist', 'Search', 'Waypoints', 'Disabler', 'MurderMystery', 'SilentAim', 'Gravity', 'Parkour', 'LongJump', 'HitBoxes', "AutoClicker", "MouseTP"} do
     vape:Remove(v)
 end
 
@@ -45,7 +45,7 @@ end
 run(function()
     local sprint
 
-    sprint = vape.Categories.Blatant:CreateModule({
+    sprint = vape.Categories.Combat:CreateModule({
         Name = 'Sprint',
         Function = function(callback)
             if callback then
@@ -57,9 +57,7 @@ run(function()
 
                 task.spawn(function()
                     while running and sprint.Enabled do
-                        if lplr:GetAttribute("SprintToggleEnabled") then
-                            Sprint:FireServer(true)
-                        end
+                        Sprint:FireServer(true)
                         task.wait()
                     end
                 end)
@@ -113,7 +111,7 @@ run(function()
 		end
 	end
 
-	Velocity = vape.Categories.Blatant:CreateModule({
+	Velocity = vape.Categories.Combat:CreateModule({
 		Name = 'Velocity',
 		Function = function(callback)
 			if callback then

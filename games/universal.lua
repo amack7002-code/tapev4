@@ -12,6 +12,15 @@ local isfile = isfile or function(file)
 	return suc and res ~= nil and res ~= ''
 end
 local function downloadFile(path, func)
+	-- local files win over github: a copy of the repo at the workspace root or in
+	-- aerov4/local/ loads instead of downloading
+	local repoPath = select(1, path:gsub('aerov4/', ''))
+	if isfile(repoPath) then
+		return (func or readfile)(repoPath)
+	end
+	if isfile('aerov4/local/'..repoPath) then
+		return (func or readfile)('aerov4/local/'..repoPath)
+	end
 	if not isfile(path) then
 		local suc, res = pcall(function()
 			return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/'..readfile('aerov4/profiles/commit.txt')..'/'..select(1, path:gsub('aerov4/', '')), true)

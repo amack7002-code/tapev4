@@ -8,6 +8,15 @@ end
 local delfile = delfile or function(file) writefile(file, '') end
 
 local function downloadFile(path, func)
+	-- local files win over github: a copy of the repo at the workspace root or in
+	-- aerov4/local/ loads instead of downloading
+	local repoPath = select(1, path:gsub('aerov4/', ''))
+	if isfile(repoPath) then
+		return (func or readfile)(repoPath)
+	end
+	if isfile('aerov4/local/'..repoPath) then
+		return (func or readfile)('aerov4/local/'..repoPath)
+	end
 	if not isfile(path) then
 		local suc, res = pcall(function()
 			return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/'..readfile('aerov4/profiles/commit.txt')..'/'..select(1, path:gsub('aerov4/', '')), true)
@@ -30,13 +39,14 @@ local function wipeFolder(path)
 	if not isfolder(path) then return end
 	for _, file in listfiles(path) do
 		if file:find('loader') then continue end
+		if (file:gsub('\\', '/')):find('aerov4/local/', 1, true) then continue end
 		if isfile(file) and select(1, readfile(file):find('--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.')) == 1 then
 			delfile(file)
 		end
 	end
 end
 
-for _, folder in {'aerov4', 'aerov4/games', 'aerov4/profiles', 'aerov4/assets', 'aerov4/libraries', 'aerov4/guis'} do
+for _, folder in {'aerov4', 'aerov4/games', 'aerov4/profiles', 'aerov4/assets', 'aerov4/libraries', 'aerov4/guis', 'aerov4/local', 'aerov4/local/games', 'aerov4/local/guis', 'aerov4/local/libraries', 'aerov4/local/assets'} do
 	if not isfolder(folder) then makefolder(folder) end
 end
 
