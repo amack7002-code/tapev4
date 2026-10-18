@@ -107,12 +107,12 @@ entitylib.IgnoreObject.RespectCanCollide = true
 entitylib.Raycast = function(origin, direction, params)
 	return workspace:Raycast(origin, direction, params)
 end
-entitylib.Wallcheck = function(origin, position, ignoreobject)
+entitylib.Wallcheck = function(origin, position, ignoreobject, entity)
 	if typeof(ignoreobject) ~= 'Instance' then
 		local ignorelist = {gameCamera, lplr.Character}
-		for _, entity in entitylib.List do
-			if entity.Targetable then
-				table.insert(ignorelist, entity.Character)
+		for _, ent in entitylib.List do
+			if ent.Targetable then
+				table.insert(ignorelist, ent.Character)
 			end
 		end
 
@@ -125,7 +125,36 @@ entitylib.Wallcheck = function(origin, position, ignoreobject)
 		ignoreobject = entitylib.IgnoreObject
 		ignoreobject.FilterDescendantsInstances = ignorelist
 	end
-	return entitylib.Raycast(origin, position - origin, ignoreobject)
+	local blocked = entitylib.Raycast(origin, position - origin, ignoreobject)
+	if not blocked then
+		return nil
+	end
+	local points = {}
+	if type(entity) == 'table' and entity.Character then
+		local head = entity.Head or entity.Character:FindFirstChild('Head')
+		if head and head.Parent then
+			table.insert(points, head.Position)
+		end
+		local root = entity.RootPart
+		if root and root.Parent then
+			local right = root.CFrame.RightVector * 0.9
+			table.insert(points, root.Position + right)
+			table.insert(points, root.Position - right)
+			table.insert(points, root.Position - Vector3.new(0, (entity.HipHeight or 2) * 0.6, 0))
+		end
+	else
+		table.insert(points, position + Vector3.new(0, 1.5, 0))
+		table.insert(points, position - Vector3.new(0, 1.5, 0))
+	end
+	local origins = {origin, origin + Vector3.new(0, 1.5, 0)}
+	for _, from in origins do
+		for _, point in points do
+			if not entitylib.Raycast(from, point - from, ignoreobject) then
+				return nil
+			end
+		end
+	end
+	return blocked
 end
 
 entitylib.EntityMouse = function(entitysettings)

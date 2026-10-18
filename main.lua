@@ -4,7 +4,7 @@ if shared.vape then shared.vape:Uninject() end
 local LOADER_URL = "https://raw.githubusercontent.com/wrealaero/aerov4/main/downloader.lua" 
 local _initArgs = ...
 if type(_initArgs) ~= "table" then _initArgs = {} end
-shared.aerov4User = "my cutie <3"
+shared.aerov4User = "spookers 👻"
 
 if identifyexecutor then
 	if table.find({'Wave', 'Seliware', 'Volt'}, ({identifyexecutor()})[1]) then
@@ -263,19 +263,42 @@ if not shared.VapeIndependent then
 		local gameSrc = downloadFile('aerov4/games/' .. gameFileId .. '.lua')
 		local gameFunc, gameErr = loadstring(gameSrc, tostring(gameFileId))
 		if not gameFunc then
-			local msg = tostring(gameErr)
-			local ln = msg:match(':(%d+):')
+			local ls = gameSrc:split('\n')
+			local msg = gameErr and tostring(gameErr) or 'executor didnt say why'
+			local n = tonumber(msg:match(':(%d+):'))
+			local where = ''
+			if not n then
+				local starts = {1}
+				for i = 2, #ls do
+					if ls[i]:match('^run%(function%(%)') then
+						table.insert(starts, i)
+					end
+				end
+				for idx, s in starts do
+					local e = (starts[idx + 1] or (#ls + 1)) - 1
+					if not loadstring(table.concat(ls, '\n', s, e), 'check') then
+						local name
+						for i = s, e do
+							name = ls[i]:match("Name = '([^']+)'")
+							if name then break end
+						end
+						where = '\nbroken part is lines ' .. s .. ' to ' .. e .. (name and ' in ' .. name or '')
+						break
+					end
+				end
+				if where == '' then
+					where = '\ncouldnt find the broken part, prob a missing end between 2 modules'
+				end
+			end
 			local ctx = ''
-			if ln then
-				local n = tonumber(ln)
-				local ls = gameSrc:split('\n')
+			if n then
 				local parts = {}
 				for i = math.max(1, n - 3), math.min(#ls, n + 3) do
-					table.insert(parts, (i == n and '>>> ' or '    ') .. i .. ': ' .. (ls[i] or ''))
+					table.insert(parts, (i == n and '>>> ' or '    ') .. i .. ': ' .. (ls[i] or ''):gsub('\r', ''))
 				end
-				ctx = '\n\nContext:\n' .. table.concat(parts, '\n')
+				ctx = '\n\naround here:\n' .. table.concat(parts, '\n')
 			end
-			error('[aerov4] syntax error in ' .. gameFileId .. '.lua\n' .. msg .. ctx)
+			error('[aerov4] syntax error in ' .. gameFileId .. '.lua\n' .. msg .. where .. ctx)
 		end
 		gameFunc(...)
 	else
