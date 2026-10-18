@@ -22,7 +22,7 @@ local runService = cloneref(game:GetService('RunService'))
 local guiService = cloneref(game:GetService('GuiService'))
 local coreGui = cloneref(game:GetService('CoreGui'))
 
-local gameCamera = workspace.CurrentCamera
+local gameCamera = workspace.CurrentCamera or workspace:FindFirstChildWhichIsA('Camera')
 local lplr = playersService.LocalPlayer
 local vape = shared.vape
 local entitylib = vape.Libraries.entity
@@ -93,18 +93,29 @@ end)
 entitylib.start()
 
 run(function()
-	tribes = {
-		Camera = require(replicatedStorage.Shared.Camera),
-		Combat = require(replicatedStorage.Shared.Combat),
-		CombatController = require(lplr.PlayerScripts.Combat.Controller),
-		Economy = require(lplr.PlayerScripts.UI.Economy),
-		Melee = require(lplr.PlayerScripts.Combat.Handlers.Melee),
-		Weapons = require(replicatedStorage.Shared.Weapons),
-		Util = require(lplr.PlayerScripts.Combat.Util)
-	}
+	repeat
+		local suc = pcall(function()
+			tribes = {
+				Camera = require(replicatedStorage.Shared.Camera),
+				Combat = require(replicatedStorage.Shared.Combat),
+				CombatController = require(lplr.PlayerScripts.Combat.Controller),
+				Economy = require(lplr.PlayerScripts.UI.Economy),
+				Melee = require(lplr.PlayerScripts.Combat.Handlers.Melee),
+				Weapons = require(replicatedStorage.Shared.Weapons),
+				Util = require(lplr.PlayerScripts.Combat.Util)
+			}
+		end)
+		if not suc then
+			task.wait()
+		end
+	until suc
 
-	tribes.State = debug.getupvalue(tribes.CombatController.State, 2)
-	tribes.SetSpeed = debug.getupvalue(debug.getupvalue(tribes.CombatController.Equip, 11), 15)
+	pcall(function()
+		tribes.State = debug.getupvalue(tribes.CombatController.State, 2)
+	end)
+	pcall(function()
+		tribes.SetSpeed = debug.getupvalue(debug.getupvalue(tribes.CombatController.Equip, 11), 15)
+	end)
 
 	local kills = sessioninfo:AddItem('Kills')
 	local deaths = sessioninfo:AddItem('Deaths')
@@ -137,26 +148,38 @@ run(function()
 		end)
 	end
 
-	vape:Clean(replicatedStorage.Remotes.HitConfirm.OnClientEvent:Connect(function(data)
-		if data and data.killed and isMatch then
-			kills:Increment()
-		end
-	end))
+	task.spawn(function()
+		local remotes = replicatedStorage:WaitForChild('Remotes', 30)
+		if not remotes then return end
 
-	vape:Clean(replicatedStorage.Remotes.MatchEvent.OnClientEvent:Connect(function(event, data)
-		if isMatch then
-			if event == 'MatchEnd' then
-				local didWin = data and data.winnerTeam == lplr:GetAttribute('Team')
-				if didWin then
-					wins:Increment()
+		local hitConfirm = remotes:WaitForChild('HitConfirm', 30)
+		local matchEvent = remotes:WaitForChild('MatchEvent', 30)
+
+		if hitConfirm then
+			vape:Clean(hitConfirm.OnClientEvent:Connect(function(data)
+				if data and data.killed and isMatch then
+					kills:Increment()
 				end
-
-				vapeEvents.MatchEnded:Fire(didWin)
-			elseif event == 'Elimination' and data and data.victimId == 'p'..lplr.UserId then
-				deaths:Increment()
-			end
+			end))
 		end
-	end))
+
+		if matchEvent then
+			vape:Clean(matchEvent.OnClientEvent:Connect(function(event, data)
+				if isMatch then
+					if event == 'MatchEnd' then
+						local didWin = data and data.winnerTeam == lplr:GetAttribute('Team')
+						if didWin then
+							wins:Increment()
+						end
+
+						vapeEvents.MatchEnded:Fire(didWin)
+					elseif event == 'Elimination' and data and data.victimId == 'p'..lplr.UserId then
+						deaths:Increment()
+					end
+				end
+			end))
+		end
+	end)
 end)
 
 for _, v in {'AutoClicker', 'TriggerBot', 'Jesus', 'AutoRejoin', 'Disabler', 'MurderMystery', 'Parkour',} do
@@ -211,9 +234,12 @@ local function getAttackData()
 		if not inputService:IsMouseButtonPressed(0) then return false end
 	end
 
-	if tribes.State.handler and tribes.State.handler.lastSwing then
-		return tribes.State.tool
+	local state = tribes.State
+	if state and state.handler and state.handler.lastSwing then
+		return state.tool
 	end
+
+	return false
 end
 
 Killaura = vape.Categories.Blatant:CreateModule({
@@ -225,15 +251,16 @@ Killaura = vape.Categories.Blatant:CreateModule({
 				local attacked = {}
 
 				if tool then
-					local handler = tribes.State.handler
-					local entities = entitylib.AllPosition({
+					local state = tribes.State
+					local handler = state and state.handler
+					local entities = handler and entitylib.AllPosition({
 						Range = AttackRange.Value,
 						Wallcheck = Targets.Walls.Enabled or nil,
 						Part = 'RootPart',
 						Players = Targets.Players.Enabled,
 						NPCs = Targets.NPCs.Enabled,
 						Limit = Max.Value
-					})
+					}) or {}
 
 					if #entities > 0 then
 						local localPos = entitylib.character.RootPart.Position
@@ -261,41 +288,47 @@ Killaura = vape.Categories.Blatant:CreateModule({
 								entitylib.character.RootPart.CFrame = CFrame.lookAlong(localPos, delta * Vector3.new(1, 0, 1))
 							end
 
-							if AttackDelay < os.clock() and (AutoBlock.Enabled or not tribes.State.handler.blocking) then
+							local tuning = handler.tuning or {}
+							if AttackDelay < os.clock() and (AutoBlock.Enabled or not handler.blocking) then
 								local targets = {}
 								handler.lastSwing = os.clock()
 
-								AttackDelay = os.clock() + (handler.tuning.cooldown or 0.5)
+								AttackDelay = os.clock() + (tuning.cooldown or 0.5)
 								for _, data in attacked do
 									table.insert(targets, data.Entity.Character)
 								end
 
-								if AutoBlock.Enabled and handler.tuning.block then
-									tribes.State.handler:SetBlock(false)
+								if AutoBlock.Enabled and tuning.block then
+									handler:SetBlock(false)
 								end
 
 								local oneHanded = handler:OneHanded()
-								local comboTable = oneHanded and (handler.tuning.oneHanded.combo or {1}) or (handler.tuning.combo or {1})
-								local animTable = oneHanded and handler.preset.oneSwings or handler.preset.swings or {}
-								handler.combo = (handler.combo % #comboTable) + 1
+								local comboTable = oneHanded and (tuning.oneHanded and tuning.oneHanded.combo or {1}) or (tuning.combo or {1})
+								local preset = handler.preset or {}
+								local animTable = oneHanded and (preset.oneSwings or preset.swings) or preset.swings or {}
+								handler.combo = ((handler.combo or 0) % #comboTable) + 1
 								local finisher = (#comboTable > 2) and (handler.combo == #comboTable)
-								tribes.Util.PlayAnim(handler.ctx.animator, animTable[((handler.combo - 1) % math.max(1, #animTable)) + 1], (handler.preset.swingSpeed or 1) * (finisher and 0.95 or 1), 0.05)
+								if tribes.Util and handler.ctx then
+									tribes.Util.PlayAnim(handler.ctx.animator, animTable[((handler.combo - 1) % math.max(1, #animTable)) + 1], (preset.swingSpeed or 1) * (finisher and 0.95 or 1), 0.05)
+								end
 
-								handler.ctx.emit('Swing', {
-									step = handler.combo,
-									finisher = finisher,
-									hitDelay = handler.preset.hitDelay or 0.1,
-									oneHanded = oneHanded
-								})
+								if handler.ctx then
+									handler.ctx.emit('Swing', {
+										step = handler.combo,
+										finisher = finisher,
+										hitDelay = preset.hitDelay or 0.1,
+										oneHanded = oneHanded
+									})
 
-								handler.ctx.send('Swing', {
-									dir = CFrame.lookAt(localPos, attacked[1].Entity.RootPart.Position).LookVector,
-									tool = tool,
-									hits = targets
-								})
+									handler.ctx.send('Swing', {
+										dir = CFrame.lookAt(localPos, attacked[1].Entity.RootPart.Position).LookVector,
+										tool = tool,
+										hits = targets
+									})
+								end
 
-								if AutoBlock.Enabled and handler.tuning.block then
-									tribes.State.handler:SetBlock(true)
+								if AutoBlock.Enabled and tuning.block then
+									handler:SetBlock(true)
 								end
 
 								if vape.ThreadFix then
@@ -303,9 +336,9 @@ Killaura = vape.Categories.Blatant:CreateModule({
 								end
 							end
 						end
-					elseif AutoBlock.Enabled and handler.tuning.block then
-						if tribes.Util.CanAct() then
-							tribes.State.handler:SetBlock(true)
+					elseif AutoBlock.Enabled and handler and handler.tuning and handler.tuning.block then
+						if tribes.Util and tribes.Util.CanAct() then
+							handler:SetBlock(true)
 						end
 
 						if vape.ThreadFix then
@@ -386,7 +419,7 @@ Killaura:CreateToggle({
 				box.CFrame = CFrame.new(0, -0.5, 0)
 				box.Size = Vector3.new(3, 5, 3)
 				box.ZIndex = 0
-				box.Parent = vape.holder
+				box.Parent = vape.gui
 				Boxes[i] = box
 			end
 		else
@@ -507,15 +540,26 @@ ParticleSize = Killaura:CreateSlider({
 end)
 
 run(function()
+    local old
+
     vape.Categories.Blatant:CreateModule({
 	Name = 'NoSlowdown',
 	Function = function(callback)
 		if callback then
-			old = hookfunction(tribes.SetSpeed, function() end)
-			table.clear(tribes.State.speed)
+			if type(tribes.SetSpeed) == 'function' then
+				old = hookfunction(tribes.SetSpeed, function() end)
+			end
+			if tribes.State and tribes.State.speed then
+				table.clear(tribes.State.speed)
+			end
 		else
 			if old then
-				restorefunction(tribes.SetSpeed)
+				if restorefunction then
+					restorefunction(tribes.SetSpeed)
+				else
+					hookfunction(tribes.SetSpeed, old)
+				end
+				old = nil
 			end
 		end
 	end,
@@ -539,7 +583,7 @@ AimAssist = vape.Categories.Combat:CreateModule({
 	Function = function(callback)
 		if callback then
 			AimAssist:Clean(runService.Heartbeat:Connect(function(dt)
-				if entitylib.isAlive and tribes.State.handler and tribes.State.handler.lastSwing and ((not ClickAim.Enabled) or (os.clock() - (tribes.State.handler.lastSwing or 0)) < 0.5) then
+				if entitylib.isAlive and tribes.State and tribes.State.handler and tribes.State.handler.lastSwing and ((not ClickAim.Enabled) or (os.clock() - (tribes.State.handler.lastSwing or 0)) < 0.5) then
 					local entity = entitylib.EntityPosition({
 						Range = Distance.Value,
 						Part = 'RootPart',
@@ -555,7 +599,9 @@ AimAssist = vape.Categories.Combat:CreateModule({
 						if angle >= (math.rad(AngleSlider.Value) / 2) then return end
 						targetinfo.Targets[entity] = os.clock() + 1
 						local lerped = gameCamera.CFrame:Lerp(CFrame.lookAt(gameCamera.CFrame.Position, entity.RootPart.Position), (AimSpeed.Value + (StrafeIncrease.Enabled and (inputService:IsKeyDown(Enum.KeyCode.A) or inputService:IsKeyDown(Enum.KeyCode.D)) and 10 or 0)) * dt).LookVector
+						if tribes.Camera and tribes.Camera.SetLook then
 						tribes.Camera.SetLook(math.atan2(-lerped.X, -lerped.Z), Vertical.Enabled and math.asin(lerped.Y) or nil)
+					end
 					end
 				end
 			end))
@@ -579,7 +625,7 @@ Distance = AimAssist:CreateSlider({
 	Min = 1,
 	Max = 30,
 	Default = 30,
-	Suffx = function(val)
+	Suffix = function(val)
 		return val == 1 and 'stud' or 'studs'
 	end
 })
@@ -602,22 +648,31 @@ StrafeIncrease = AimAssist:CreateToggle({
 end)
 
 run(function()
+    local Reach
     local Value
-local old
+    local old
 
 Reach = vape.Categories.Combat:CreateModule({
 	Name = 'Reach',
 	Function = function(callback)
 		if callback then
-			old = hookfunction(tribes.Melee.Detect, function(...)
-				local pack = table.pack(...)
-				pack[2] += Value.Value
+			if type(tribes.Melee and tribes.Melee.Detect) == 'function' then
+				old = hookfunction(tribes.Melee.Detect, function(...)
+					local pack = table.pack(...)
+					if pack.n >= 2 and type(pack[2]) == 'number' then
+						pack[2] += Value.Value
+					end
 
-				return old(unpack(pack, 1, pack.n))
-			end)
+					return old(unpack(pack, 1, pack.n))
+				end)
+			end
 		else
 			if old then
-				restorefunction(tribes.Melee.Detect)
+				if restorefunction then
+					restorefunction(tribes.Melee.Detect)
+				else
+					hookfunction(tribes.Melee.Detect, old)
+				end
 				old = nil
 			end
 		end
@@ -656,7 +711,12 @@ local function Hook(...)
 		end
 	end
 
-	if handler then
+	if not handler then
+		return old(...)
+	end
+
+	local args = table.pack(...)
+	local ok, res = pcall(function()
 		local entity = entitylib.EntityMouse({
 			Range = Range.Value,
 			Part = 'RootPart',
@@ -666,11 +726,14 @@ local function Hook(...)
 
 		if entity then
 			local targetPart = entity.RootPart
-			local origin = ... or gameCamera.CFrame.Position
+			local origin = args[1] or gameCamera.CFrame.Position
 			local projSpeed = handler.tuning.speed or (handler.tuning.speedMax or 200)
 
-			if handler.drawStart then
-				projSpeed = select(2, tribes.Combat.DrawnShot(handler.tuning, debug.getstack(3, 4)))
+			if handler.drawStart and tribes.Combat then
+				local drawOk, _, drawnSpeed = pcall(tribes.Combat.DrawnShot, handler.tuning, debug.getstack(3, 4))
+				if drawOk and drawnSpeed then
+					projSpeed = drawnSpeed
+				end
 			end
 
 			local calc = prediction.SolveTrajectory(origin, projSpeed, math.abs(handler.tuning.gravity or (handler.spreadNow and 0 or 60)), targetPart.Position, entity.RootPart.AssemblyLinearVelocity)
@@ -692,16 +755,19 @@ local function Hook(...)
 						spread = handler.tuning.spreadHip or 0
 					end
 
-					local spreadDir = tribes.Combat.SpreadDir(lookDir, spread, handler:Seed(tribes.State.shotId + 1), 0)
+					local spreadDir = tribes.Combat.SpreadDir(lookDir, spread, handler:Seed(tribes.State and (tribes.State.shotId + 1) or 1), 0)
 					return (CFrame.lookAt(Vector3.zero, lookDir) * CFrame.lookAt(Vector3.zero, lookDir):ToObjectSpace(CFrame.lookAt(Vector3.zero, spreadDir)):Inverse()).LookVector
 				end
 
 				return lookDir
 			end
 		end
-	end
+	end)
 
-	return old(...)
+	if ok and res then
+		return res
+	end
+	return old(unpack(args, 1, args.n))
 end
 
 SilentAim = vape.Categories.Combat:CreateModule({
@@ -712,9 +778,11 @@ SilentAim = vape.Categories.Combat:CreateModule({
 		end
 
 		if callback then
-			old = hookfunction(tribes.Util.AimDirection, function(...)
-				return Hook(...)
-			end)
+			if type(tribes.Util and tribes.Util.AimDirection) == 'function' then
+				old = hookfunction(tribes.Util.AimDirection, function(...)
+					return Hook(...)
+				end)
+			end
 
 			repeat
 				if CircleObject then
@@ -827,6 +895,7 @@ run(function()
     local Velocity
 
 local function LocalAdded(char)
+	if not (char and char.RootPart) then return end
 	Velocity:Clean(char.RootPart.AttributeChanged:Connect(function(key)
 		if key:find('Kb') and char.RootPart:GetAttribute(key) then
 			char.RootPart:SetAttribute(key, nil)
@@ -856,11 +925,13 @@ AutoUpgrade = vape.Categories.Inventory:CreateModule({
 	Function = function(callback)
 		if callback then
 			repeat
-				if (not lplr:GetAttribute('MatchId') or lplr:GetAttribute('MatchId') == '') then
-					local item = tribes.Economy.ReadyList()[1]
-					if item then
-						tribes.Economy.Upgrade(item)
-					end
+				if tribes.Economy and (not lplr:GetAttribute('MatchId') or lplr:GetAttribute('MatchId') == '') then
+					pcall(function()
+						local item = tribes.Economy.ReadyList()[1]
+						if item then
+							tribes.Economy.Upgrade(item)
+						end
+					end)
 				end
 
 				task.wait(0.05)
@@ -886,7 +957,9 @@ AutoQueue = vape.Categories.Utility:CreateModule({
 				end
 
 				task.delay(Delay.Value, function()
-					replicatedStorage.Remotes.QueueAction:InvokeServer('PlayAgain')
+					pcall(function()
+						replicatedStorage.Remotes.QueueAction:InvokeServer('PlayAgain')
+					end)
 				end)
 			end))
 		end
@@ -930,9 +1003,13 @@ local function sendMessage(name, obj, default)
 
 	message = message and message:gsub('<obj>', obj or '') or ''
 	if textChatService:CanUserChatAsync(lplr.UserId) then
-		textChatService.ChatInputBarConfiguration.TargetTextChannel:SendAsync(message)
+		pcall(function()
+			textChatService.ChatInputBarConfiguration.TargetTextChannel:SendAsync(message)
+		end)
 	else
-		textChatService.ChatInputBarConfiguration.TargetTextChannel:SendPresetAsync(Presets[message] or Presets['So close'])
+		pcall(function()
+			textChatService.ChatInputBarConfiguration.TargetTextChannel:SendPresetAsync(Presets[message] or Presets['So close'])
+		end)
 	end
 end
 
@@ -943,9 +1020,13 @@ AutoToxic = vape.Categories.Utility:CreateModule({
 			AutoToxic:Clean(vapeEvents.MatchEnded.Event:Connect(function(won)
 				if GG.Enabled then
 					if textChatService:CanUserChatAsync(lplr.UserId) then
-						textChatService.ChatInputBarConfiguration.TargetTextChannel:SendAsync('gg')
+						pcall(function()
+							textChatService.ChatInputBarConfiguration.TargetTextChannel:SendAsync('gg')
+						end)
 					else
-						textChatService.ChatInputBarConfiguration.TargetTextChannel:SendPresetAsync(Presets['Good game'])
+						pcall(function()
+							textChatService.ChatInputBarConfiguration.TargetTextChannel:SendPresetAsync(Presets['Good game'])
+						end)
 					end
 				end
 
