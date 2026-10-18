@@ -10,8 +10,13 @@ local delfile = delfile or function(file) writefile(file, '') end
 local function downloadFile(path, func)
 	if not isfile(path) then
 		local suc, res = pcall(function()
-			return game:HttpGet('https://raw.githubusercontent.com/wrealaero/aerov4/'..readfile('aerov4/profiles/commit.txt')..'/'..select(1, path:gsub('aerov4/', '')), true)
+			return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/'..readfile('aerov4/profiles/commit.txt')..'/'..select(1, path:gsub('aerov4/', '')), true)
 		end)
+		if not suc or res == '404: Not Found' then
+			suc, res = pcall(function()
+				return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/main/'..select(1, path:gsub('aerov4/', '')), true)
+			end)
+		end
 		if not suc or res == '404: Not Found' then error(res) end
 		if path:find('%.lua') then
 			res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'..res
@@ -49,7 +54,7 @@ local function downloadPremadeProfiles(commit)
 		makefolder('aerov4/profiles/premade')
 	end
 	local success, response = pcall(function()
-		return game:HttpGet('https://api.github.com/repos/wrealaero/aerov4/contents/profiles/premade?ref=' .. commit)
+		return game:HttpGet('https://api.github.com/repos/amack7002-code/tapev4/contents/profiles/premade?ref=' .. commit)
 	end)
 	if success and response then
 		local ok, files = pcall(function() return httpService:JSONDecode(response) end)
@@ -72,7 +77,7 @@ if not shared.VapeDeveloper then
 	local latest = isfile('aerov4/profiles/latest.txt') and readfile('aerov4/profiles/latest.txt') or ''
 	if #commit ~= 40 then
 		local ok, res = pcall(function()
-			return game:HttpGet('https://api.github.com/repos/wrealaero/aerov4/commits/main', true)
+			return game:HttpGet('https://api.github.com/repos/amack7002-code/tapev4/commits/main', true)
 		end)
 		if ok and res then
 			local h = res:match('"sha":"([a-f0-9]+)"')
@@ -86,7 +91,7 @@ if not shared.VapeDeveloper then
 	end
 	task.spawn(function()
 		local ok, res = pcall(function()
-			return game:HttpGet('https://api.github.com/repos/wrealaero/aerov4/commits/main', true)
+			return game:HttpGet('https://api.github.com/repos/amack7002-code/tapev4/commits/main', true)
 		end)
 		if ok and res then
 			local h = res:match('"sha":"([a-f0-9]+)"')

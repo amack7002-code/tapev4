@@ -1,7 +1,7 @@
 repeat task.wait() until game:IsLoaded()
 if shared.vape then shared.vape:Uninject() end
 
-local LOADER_URL = "https://raw.githubusercontent.com/wrealaero/aerov4/main/downloader.lua" 
+local LOADER_URL = "https://raw.githubusercontent.com/amack7002-code/tapev4/main/downloader.lua" 
 local _initArgs = ...
 if type(_initArgs) ~= "table" then _initArgs = {} end
 shared.aerov4User = "spookers 👻"
@@ -73,7 +73,7 @@ local function downloadFile(path, func)
 		local success = false
 		for attempt = 1, 3 do
 			local suc, result = pcall(function()
-				return game:HttpGet('https://raw.githubusercontent.com/wrealaero/aerov4/' .. readfile('aerov4/profiles/commit.txt') .. '/' .. select(1, path:gsub('aerov4/', '')), true)
+				return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/' .. readfile('aerov4/profiles/commit.txt') .. '/' .. select(1, path:gsub('aerov4/', '')), true)
 			end)
 			if suc and result ~= '404: Not Found' then
 				res = result
@@ -83,7 +83,17 @@ local function downloadFile(path, func)
 			task.wait(1)
 		end
 		if not success then
-			error('Failed to download ' .. path .. ' after 3 attempts')
+			-- pinned commit may be stale (e.g. from a different repo), fall back to main
+			local suc, result = pcall(function()
+				return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/main/' .. select(1, path:gsub('aerov4/', '')), true)
+			end)
+			if suc and result ~= '404: Not Found' then
+				res = result
+				success = true
+			end
+		end
+		if not success then
+			error('Failed to download ' .. path)
 		end
 		if path:find('%.lua') then
 			res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n' .. res
@@ -304,8 +314,14 @@ if not shared.VapeIndependent then
 	else
 		if not shared.VapeDeveloper then
 			local suc, res = pcall(function()
-				return game:HttpGet('https://raw.githubusercontent.com/wrealaero/aerov4/' .. readfile('aerov4/profiles/commit.txt') .. '/games/' .. gameFileId .. '.lua', true)
+				return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/' .. readfile('aerov4/profiles/commit.txt') .. '/games/' .. gameFileId .. '.lua', true)
 			end)
+			if not suc or res == '404: Not Found' then
+				-- pinned commit may be stale, fall back to main
+				suc, res = pcall(function()
+					return game:HttpGet('https://raw.githubusercontent.com/amack7002-code/tapev4/main/games/' .. gameFileId .. '.lua', true)
+				end)
+			end
 			if suc and res and res ~= '404: Not Found' then
 				local path = 'aerov4/games/' .. gameFileId .. '.lua'
 				if not isfile(path) then
