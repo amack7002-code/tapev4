@@ -10169,58 +10169,84 @@ run(function()
 	local savedImpulseTime
 	local rayCheck = cloneRaycast()
 	rayCheck.RespectCanCollide = true
-	rayCheck.FilterDescendantsInstances = {lplr.Character, gameCamera}
-	
+
+	local function getKnockbackController()
+		local knit = bedwars.Knit
+		return knit and knit.Controllers.StatefulEntityKnockbackController or nil
+	end
+
+	local function getSprintController()
+		local knit = bedwars.Knit
+		return knit and knit.Controllers.SprintController or nil
+	end
+
+	local function restoreMovement()
+		local knockback = getKnockbackController()
+		if knockback then
+			pcall(function()
+				knockback.lastImpulseTime = (savedImpulseTime ~= nil and savedImpulseTime ~= math.huge) and savedImpulseTime or time()
+			end)
+		end
+		savedImpulseTime = nil
+		pcall(function()
+			if entitylib.isAlive then
+				local root = entitylib.character.RootPart
+				root.AssemblyLinearVelocity = Vector3.new(0, root.AssemblyLinearVelocity.Y, 0)
+			end
+		end)
+		local sprint = getSprintController()
+		if sprint then
+			pcall(function()
+				sprint:setSpeed(sprint:isSprinting() and 20 or 14)
+			end)
+		end
+	end
+
 	Speed = vape.Categories.Blatant:CreateModule({
 		Name = 'Speed',
 		Function = function(callback)
 			frictionTable.Speed = callback or nil
 			updateVelocity()
 			pcall(function()
-				debug.setconstant(bedwars.WindWalkerController.updateSpeed, 7, callback and 'constantSpeedMultiplier' or 'moveSpeedMultiplier')
+				local windwalker = bedwars.Knit and bedwars.Knit.Controllers.WindWalkerController
+				debug.setconstant(windwalker.updateSpeed, 7, callback and 'constantSpeedMultiplier' or 'moveSpeedMultiplier')
 			end)
-	
+
 			if callback then
-				if savedImpulseTime == nil then
-					savedImpulseTime = bedwars.StatefulEntityKnockbackController.lastImpulseTime
+				local knockback = getKnockbackController()
+				if knockback and savedImpulseTime == nil then
+					savedImpulseTime = knockback.lastImpulseTime
 				end
-				Speed:Clean(function()
-					pcall(function()
-						bedwars.StatefulEntityKnockbackController.lastImpulseTime = (savedImpulseTime ~= nil and savedImpulseTime ~= math.huge) and savedImpulseTime or time()
-					end)
-					savedImpulseTime = nil
-					pcall(function()
-						if entitylib.isAlive then
-							local root = entitylib.character.RootPart
-							root.AssemblyLinearVelocity = Vector3.new(0, root.AssemblyLinearVelocity.Y, 0)
-						end
-					end)
-					pcall(function()
-						bedwars.SprintController:setSpeed(bedwars.SprintController:isSprinting() and 20 or 14)
-					end)
-				end)
+				Speed:Clean(restoreMovement)
 				Speed:Clean(runService.PreSimulation:Connect(function(dt)
 					if not Speed.Enabled then return end
-					bedwars.StatefulEntityKnockbackController.lastImpulseTime = math.huge
+					local knockback = getKnockbackController()
+					if knockback then
+						knockback.lastImpulseTime = math.huge
+					end
 					if entitylib.isAlive then
 						if not (Fly and Fly.Enabled) and not (LongJump and LongJump.Enabled) then
-							bedwars.SprintController:setSpeed(Mode.Value == 'CFrame' and 20 or Value.Value)
+							local sprint = getSprintController()
+							if sprint then
+								sprint:setSpeed(Mode.Value == 'CFrame' and 20 or Value.Value)
+							end
 							if Mode.Value == 'CFrame' then
 								local state = entitylib.character.Humanoid:GetState()
 								if state == Enum.HumanoidStateType.Climbing then return end
-			
+
 								local root, velo = entitylib.character.RootPart, getSpeed()
 								local moveDirection = AntiFallDirection or entitylib.character.Humanoid.MoveDirection
 								local destination = (moveDirection * math.max(Value.Value - velo, 0) * dt)
-			
+
 								if WallCheck.Enabled then
 									rayCheck.CollisionGroup = root.CollisionGroup
+									rayCheck.FilterDescendantsInstances = {lplr.Character, gameCamera}
 									local ray = workspace:Raycast(root.Position, destination, rayCheck)
 									if ray then
 										destination = ((ray.Position + ray.Normal) - root.Position)
 									end
 								end
-			
+
 								root.CFrame += destination
 								root.AssemblyLinearVelocity = (moveDirection * velo) + Vector3.new(0, root.AssemblyLinearVelocity.Y, 0)
 								if AutoJump.Enabled and (state == Enum.HumanoidStateType.Running or state == Enum.HumanoidStateType.Landed) and moveDirection ~= Vector3.zero and (Attacking or AlwaysJump.Enabled) then
@@ -10231,19 +10257,7 @@ run(function()
 					end
 				end))
 			else
-				pcall(function()
-					bedwars.StatefulEntityKnockbackController.lastImpulseTime = (savedImpulseTime ~= nil and savedImpulseTime ~= math.huge) and savedImpulseTime or time()
-				end)
-				savedImpulseTime = nil
-				pcall(function()
-					if entitylib.isAlive then
-						local root = entitylib.character.RootPart
-						root.AssemblyLinearVelocity = Vector3.new(0, root.AssemblyLinearVelocity.Y, 0)
-					end
-				end)
-				pcall(function()
-					bedwars.SprintController:setSpeed(bedwars.SprintController:isSprinting() and 20 or 14)
-				end)
+				restoreMovement()
 			end
 		end,
 		ExtraText = function()
@@ -10253,8 +10267,7 @@ run(function()
 	})
 	Mode = Speed:CreateDropdown({
 		Name = 'Method',
-		List = {'Bedwars', 'CFrame'},
-		Default = 'CFrame'
+		List = {'CFrame', 'Bedwars'}
 	})
 	Value = Speed:CreateSlider({
 		Name = 'Speed',
