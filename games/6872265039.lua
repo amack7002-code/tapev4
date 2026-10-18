@@ -3475,134 +3475,119 @@ run(function()
 end)
 
 run(function()
-    local WinstreakSpoofer
-    local Wins
+	local WinstreakSpoofer
+	local Wins
+	local winLoop
+	local originals = {}
 
-    local oldSets = {
-        Wins = nil,
-        DoesExist = nil,
-    }
+	local function getNametag()
+		local char = lplr.Character
+		local head = char and char:FindFirstChild('Head')
+		return head and head:FindFirstChild('Nametag')
+	end
 
-    WinstreakSpoofer = vape.Categories.Minigames:CreateModule({
-        Name = 'WinstreakSpoofer',
-        Tooltip = 'Modifies/Adds your winstreak (client‑sided)',
-        Function = function(callback)
-            if callback then
-                if not entitylib.isAlive then return end
-                if lplr.Character.Head.Nametag then
-                    local winStreakCounter = lplr.Character.Head.Nametag:FindFirstChild("WinStreakCounter")
-                    if not winStreakCounter then
-                        local main = Instance.new('Frame')
-                        main.AnchorPoint = Vector2.new(1, 0.5)
-                        main.Name = 'WinStreakCounter'
-                        main.Size = UDim2.new(0.100000001, 0, 0.75, 0)
-                        main.Position = UDim2.new(1.04999995, 0, 0.600000024, 0)
-                        main.BackgroundTransparency = 1
-                        main.Parent = lplr.Character.Head.Nametag
-						main.LayoutOrder = 3
-						main.BorderSizePixel =0
-                        local icon = Instance.new('ImageLabel')
-                        icon.BackgroundTransparency = 1
-                        icon.Name = 'WinStreakFire'
-                        icon.Size = UDim2.fromScale(1, 1)
-                        icon.Image = 'rbxassetid://7101948108'
-                        icon.ScaleType = Enum.ScaleType.Fit
-						icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
-                        icon.Parent = main
-                        local value = Instance.new("TextLabel")
-                        value.BackgroundTransparency = 1
-                        value.Name = 'WinStreakValue'
-                        value.Position = UDim2.fromScale(0.5, 0.375)
-                        value.Size = UDim2.fromScale(0.8, 0.9)
-                        value.FontFace = Font.new("Roboto", Enum.FontWeight.Bold)
-                        value.TextSize = 8
-                        oldSets.Wins = 0
-                        value.Text = tostring(Wins.Value)
-                        value.TextColor3 = Color3.fromRGB(255, 255, 255)
-                        value.TextScaled = true
-                        value.TextStrokeTransparency = 0.5
-                        value.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-                        value.Parent = main
-						value.AutoLocalize = false
-						value.TextXAlignment = Enum.TextXAlignment.Center
-						value.AnchorPoint = Vector2.new(0.5,0)
-                        oldSets.DoesExist = false
-                    else
-                        oldSets.DoesExist = true
-                        oldSets.Wins = winStreakCounter.WinStreakValue.Text
-                        winStreakCounter.WinStreakValue.Text = tostring(Wins.Value)
-                    end
-                end
-            else
-                if lplr.Character.Head.Nametag then
-                    local winStreakCounter = lplr.Character.Head.Nametag:FindFirstChild("WinStreakCounter")
-                    if winStreakCounter then
-                        if oldSets.DoesExist then
-                            winStreakCounter.WinStreakValue.Text = oldSets.Wins
-                        else
-                            winStreakCounter:Destroy()
-                        end
-                    end
-                end
-                oldSets.Wins = nil
-                oldSets.DoesExist = nil
-            end
-        end
-    })
+	local function apply()
+		if not WinstreakSpoofer.Enabled then return end
+		local nametag = getNametag()
+		if not nametag then return end
+		local txt = tostring(math.floor(Wins.Value))
+		local counter = nametag:FindFirstChild('WinStreakCounter')
+		if counter then
+			local value = counter:FindFirstChild('WinStreakValue')
+			if value then
+				if not originals[counter] then
+					originals[counter] = {existed = true, text = value.Text}
+				end
+				if value.Text ~= txt then
+					value.Text = txt
+				end
+			end
+			return
+		end
 
-    Wins = WinstreakSpoofer:CreateSlider({
-        Name = "Wins",
-        Min = 0,
-        Max = 1000,
-        Default = 0,
-        Decimal = 1,
-        Function = function(val)
-            if WinstreakSpoofer.Enabled then
-                if lplr.Character.Head.Nametag then
-                    local winStreakCounter = lplr.Character.Head.Nametag:FindFirstChild("WinStreakCounter")
-	                if not winStreakCounter then
-                        local main = Instance.new('Frame')
-                        main.AnchorPoint = Vector2.new(1, 0.5)
-                        main.Name = 'WinStreakCounter'
-                        main.Size = UDim2.new(0.100000001, 0, 0.75, 0)
-                        main.Position = UDim2.new(1.04999995, 0, 0.600000024, 0)
-                        main.BackgroundTransparency = 1
-                        main.Parent = lplr.Character.Head.Nametag
-						main.LayoutOrder = 3
-						main.BorderSizePixel =0
-                        local icon = Instance.new('ImageLabel')
-                        icon.BackgroundTransparency = 1
-                        icon.Name = 'WinStreakFire'
-                        icon.Size = UDim2.fromScale(1, 1)
-                        icon.Image = 'rbxassetid://7101948108'
-                        icon.ScaleType = Enum.ScaleType.Fit
-						icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
-                        icon.Parent = main
-                        local value = Instance.new("TextLabel")
-                        value.BackgroundTransparency = 1
-                        value.Name = 'WinStreakValue'
-                        value.Position = UDim2.fromScale(0.5, 0.375)
-                        value.Size = UDim2.fromScale(0.8, 0.9)
-                        value.FontFace = Font.new("Roboto", Enum.FontWeight.Bold)
-                        value.TextSize = 8
-                        oldSets.Wins = 0
-                        value.Text = tostring(Wins.Value)
-                        value.TextColor3 = Color3.fromRGB(255, 255, 255)
-                        value.TextScaled = true
-                        value.TextStrokeTransparency = 0.5
-                        value.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-                        value.Parent = main
-						value.AutoLocalize = false
-						value.TextXAlignment = Enum.TextXAlignment.Center
-						value.AnchorPoint = Vector2.new(0.5,0)
-                        oldSets.DoesExist = false
-                    else
-                        winStreakCounter.WinStreakValue.Text = tostring(val)
-                    end
-                end
-            end
-        end
-    })
+		local main = Instance.new('Frame')
+		main.AnchorPoint = Vector2.new(1, 0.5)
+		main.Name = 'WinStreakCounter'
+		main.Size = UDim2.new(0.100000001, 0, 0.75, 0)
+		main.Position = UDim2.new(1.04999995, 0, 0.600000024, 0)
+		main.BackgroundTransparency = 1
+		main.LayoutOrder = 3
+		main.BorderSizePixel = 0
+		local icon = Instance.new('ImageLabel')
+		icon.BackgroundTransparency = 1
+		icon.Name = 'WinStreakFire'
+		icon.Size = UDim2.fromScale(1, 1)
+		icon.Image = 'rbxassetid://7101948108'
+		icon.ScaleType = Enum.ScaleType.Fit
+		icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
+		icon.Parent = main
+		local value = Instance.new('TextLabel')
+		value.BackgroundTransparency = 1
+		value.Name = 'WinStreakValue'
+		value.Position = UDim2.fromScale(0.5, 0.375)
+		value.Size = UDim2.fromScale(0.8, 0.9)
+		value.FontFace = Font.new('Roboto', Enum.FontWeight.Bold)
+		value.TextSize = 8
+		value.Text = txt
+		value.TextColor3 = Color3.fromRGB(255, 255, 255)
+		value.TextScaled = true
+		value.TextStrokeTransparency = 0.5
+		value.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+		value.AutoLocalize = false
+		value.TextXAlignment = Enum.TextXAlignment.Center
+		value.AnchorPoint = Vector2.new(0.5, 0)
+		value.Parent = main
+		main.Parent = nametag
+		originals[main] = {existed = false}
+	end
+
+	local function restore()
+		for counter, info in originals do
+			if info.existed then
+				pcall(function()
+					counter.WinStreakValue.Text = info.text
+				end)
+			else
+				pcall(function()
+					counter:Destroy()
+				end)
+			end
+		end
+		table.clear(originals)
+	end
+
+	WinstreakSpoofer = vape.Categories.Minigames:CreateModule({
+		Name = 'WinstreakSpoofer',
+		Tooltip = 'Modifies/Adds your winstreak (client‑sided)',
+		Function = function(callback)
+			if winLoop then
+				task.cancel(winLoop)
+				winLoop = nil
+			end
+			restore()
+			if callback then
+				winLoop = task.spawn(function()
+					while WinstreakSpoofer.Enabled do
+						pcall(apply)
+						task.wait(0.5)
+					end
+				end)
+			end
+		end
+	})
+
+	Wins = WinstreakSpoofer:CreateSlider({
+		Name = 'Wins',
+		Min = 0,
+		Max = 1000,
+		Default = 0,
+		Decimal = 1,
+		Function = function()
+			if WinstreakSpoofer.Enabled then
+				pcall(apply)
+			end
+		end
+	})
 end)
 
 run(function()
