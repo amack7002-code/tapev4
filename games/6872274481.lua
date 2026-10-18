@@ -27146,7 +27146,7 @@ run(function()
     local UPDATE_INTERVAL = 0.016
     local lastUpdateTime = 0
     local renderStepName = 'InfiniteKrystalMovement'
-    local ReplaceKit
+    local ReplaceKit, RandomKit
     local momentumWarned = false
 
     local function getKrystalController()
@@ -27188,7 +27188,24 @@ run(function()
         return invoked
     end
 
+    local function getRandomKit()
+        local pool = {}
+        if type(bedwars.BedwarsKitMeta) == 'table' then
+            for name in bedwars.BedwarsKitMeta do
+                if type(name) == 'string' and name ~= 'none' and name ~= '' and name ~= 'glacial_skater' then
+                    table.insert(pool, name)
+                end
+            end
+        end
+        if #pool == 0 then return nil end
+        return pool[math.random(#pool)]
+    end
+
     local function getReplacementKit(originalKit)
+        if RandomKit and RandomKit.Enabled then
+            local rand = getRandomKit()
+            if rand then return rand end
+        end
         local custom = ReplaceKit.Value:gsub('%s', '')
         if custom ~= '' then
             return custom:lower()
@@ -27218,6 +27235,9 @@ run(function()
                 local replacement = getReplacementKit(originalKit)
                 if replacement and replacement ~= '' and replacement ~= "glacial_skater" then
                     equipKit(replacement)
+                    notif('InfKrystal', 'Krystal momentum active, swapped to: '..replacement, 5)
+                else
+                    notif('InfKrystal', 'Krystal momentum active', 5)
                 end
 
                 runService:BindToRenderStep(
@@ -27268,14 +27288,21 @@ run(function()
     ReplaceKit = InfKrystal:CreateTextBox({
         Name = 'Replace Kit',
         Placeholder = 'kit id, e.g. yeti',
-        Tooltip = 'Kit to swap to right after Krystal gets equipped. Leave empty to swap back to the kit you had on.',
+        Tooltip = 'Kit to swap to right after Krystal gets equipped. Leave empty to swap back to the kit you had on. Ignored when Random Kit is on.',
         Function = function(enter)
             if not (enter and InfKrystal.Enabled) then return end
             local replacement = getReplacementKit('')
             if replacement ~= '' then
                 equipKit(replacement)
+                notif('InfKrystal', 'Swapped to: '..replacement, 5)
             end
         end
+    })
+
+    RandomKit = InfKrystal:CreateToggle({
+        Name = 'Random Kit',
+        Tooltip = 'Picks a random kit from the games kit list every time the module is enabled.',
+        Default = false
     })
 end)
 
