@@ -7850,6 +7850,7 @@ run(function()
     local WaterAmbient
     local WaterColor
     local waterY = 0
+    local waterPlaced = false
 
     local function findLowestBlock()
         local lowest = nil
@@ -7885,6 +7886,7 @@ run(function()
                     Vector3.new(5000, 0.01, 5000),
                     Enum.Material.Water
                 )
+                waterPlaced = true
                 terrain.WaterColor = Color3.fromHSV(WaterColor.Hue, WaterColor.Sat, WaterColor.Val)
                 terrain.WaterTransparency = 0.25
                 terrain.WaterReflectance = 0.7
@@ -7899,11 +7901,14 @@ run(function()
                     char.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
                 end))
             else
-                terrain:FillBlock(
-                    CFrame.new(0, waterY, 0),
-                    Vector3.new(5000, 0.01, 5000),
-                    Enum.Material.Air
-                )
+                if waterPlaced then
+                    terrain:FillBlock(
+                        CFrame.new(0, waterY, 0),
+                        Vector3.new(5000, 0.01, 5000),
+                        Enum.Material.Air
+                    )
+                    waterPlaced = false
+                end
                 waterY = 0
                 if entitylib.isAlive then
                     entitylib.character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
