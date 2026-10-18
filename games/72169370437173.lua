@@ -32,6 +32,7 @@ local targetinfo = vape.Libraries.targetinfo
 local sessioninfo = vape.Libraries.sessioninfo
 
 local tribes = {}
+local store = {}
 local isMatch = false
 
 local function isFriend(plr, recolor)
@@ -182,6 +183,190 @@ run(function()
 	end)
 end)
 
+-- shared support layer for the combat modules: weapon classes, items, aiming
+-- and the movement arbitration AutoWin/AntiHit move your hitbox through
+local RANGEDKINDS = {Crossbow = 'Bow', Bow = 'Bow', Longbow = 'Bow', Blunderbuss = 'Gun', Gun = 'Gun', Javelin = 'Throw', Bomb = 'Throw', Sling = 'Throw', Grenade = 'Throw', Herbs = 'Herbs'}
+local MELEEKINDS = {Sword = true, Fists = true, Spear = true, Dagger = true, Hammer = true, Axe = true, Greatsword = true, Knife = true, Club = true}
+
+store.KIND = {}
+for kind in MELEEKINDS do
+	store.KIND[kind] = 'Melee'
+end
+for kind, class in RANGEDKINDS do
+	store.KIND[kind] = class
+end
+
+function store.handler()
+	local state = tribes.State
+	local handler = state and state.handler
+	if not (handler and handler.tuning and handler.ctx) then return nil end
+	local kind = handler.kind or state.kind or (typeof(state.tool) == 'Instance' and state.tool.Name) or nil
+	local class = kind and store.KIND[kind] or nil
+	if not class and (handler.lastSwing or handler.tuning.combo or handler.tuning.range) then
+		-- unknown kind but it swings like a melee weapon
+		class = 'Melee'
+	end
+	return handler, class, kind
+end
+
+function store.body()
+	local root = entitylib.isAlive and entitylib.character.RootPart
+	return root and root.Position or Vector3.zero
+end
+
+store.hitbox = store.body
+
+function store.velocityOf(ent)
+	return ent.RootPart.AssemblyLinearVelocity
+end
+
+function store.heldClass(char)
+	if typeof(char) ~= 'Instance' then return nil end
+	local tool = char:FindFirstChildWhichIsA('Tool', true)
+	return tool and store.KIND[tool.Name] or nil
+end
+
+local worldParams = RaycastParams.new()
+worldParams.FilterType = Enum.RaycastFilterType.Exclude
+
+function store.worldParams()
+	worldParams.FilterDescendantsInstances = {lplr.Character, gameCamera}
+	return worldParams
+end
+
+function store.tools()
+	local list, seen = {}, {}
+	local function add(tool, held)
+		if not (tool and tool:IsA('Tool')) or seen[tool] then return end
+		seen[tool] = true
+		table.insert(list, {Tool = tool, Held = held, Kind = tool.Name, Class = store.KIND[tool.Name]})
+	end
+	if tribes.State and typeof(tribes.State.tool) == 'Instance' then
+		add(tribes.State.tool, true)
+	end
+	if lplr.Character then
+		add(lplr.Character:FindFirstChildOfClass('Tool'), true)
+	end
+	local backpack = lplr:FindFirstChildOfClass('Backpack')
+	if backpack then
+		for _, tool in backpack:GetChildren() do
+			add(tool, false)
+		end
+	end
+	return list
+end
+
+function store.equip(tool)
+	pcall(function()
+		local hum = lplr.Character and lplr.Character:FindFirstChildOfClass('Humanoid')
+		if hum and typeof(tool) == 'Instance' then
+			hum:EquipTool(tool)
+		end
+	end)
+end
+
+function store.aimAt(origin, ent)
+	if not (tribes.Camera and tribes.Camera.SetLook and ent and ent.RootPart) then return false end
+	local delta = ent.RootPart.Position - origin
+	local flat = delta * Vector3.new(1, 0, 1)
+	if delta.Magnitude < 0.1 or flat.Magnitude < 0.1 then return false end
+	pcall(tribes.Camera.SetLook, math.atan2(-flat.X, -flat.Z), math.asin(delta.Y / delta.Magnitude))
+	return true
+end
+
+function store.press(handler, down, ent)
+	if ent and not store.aimAt(store.body(), ent) then return end
+	pcall(handler.Input, handler, 'Primary', down)
+end
+
+local MOVEMENTPRIORITY = {AutoWin = 2, AntiHit = 1}
+local movementRequests = {}
+local movementLast, movementLastAt
+
+function store.move(owner, position)
+	movementRequests[owner] = {mode = 'move', value = position}
+end
+
+function store.lift(owner, height)
+	movementRequests[owner] = {mode = 'lift', value = height}
+end
+
+function store.release(owner)
+	movementRequests[owner] = nil
+end
+
+function store.outranked(owner)
+	local mine = MOVEMENTPRIORITY[owner] or 0
+	for other in movementRequests do
+		if other ~= owner and (MOVEMENTPRIORITY[other] or 0) > mine then
+			return true
+		end
+	end
+	return false
+end
+
+vape:Clean(runService.Heartbeat:Connect(function()
+	store.moving = entitylib.isAlive and entitylib.character.Humanoid.MoveDirection.Magnitude > 0 or nil
+
+	local best, bestOwner
+	for owner, request in movementRequests do
+		if not best or (MOVEMENTPRIORITY[owner] or 0) > (MOVEMENTPRIORITY[bestOwner] or 0) then
+			best, bestOwner = request, owner
+		end
+	end
+	if not (best and entitylib.isAlive) then
+		movementLast = nil
+		return
+	end
+
+	local root = entitylib.character.RootPart
+	local goal = best.mode == 'move' and best.value or Vector3.new(root.Position.X, best.value, root.Position.Z)
+
+	-- the server put us somewhere else than where we placed ourselves
+	if movementLast and tick() - movementLastAt < 0.5 and (root.Position - movementLast).Magnitude > 6 then
+		vapeEvents.Pulled:Fire(bestOwner)
+	end
+
+	root.CFrame = (root.CFrame - root.CFrame.Position) + goal
+	movementLast, movementLastAt = goal, tick()
+end))
+
+local function canAct()
+	if tribes.Util and tribes.Util.CanAct then
+		local ok, res = pcall(tribes.Util.CanAct)
+		return ok and res ~= false
+	end
+	return true
+end
+
+local function inMatch()
+	return isMatch == true
+end
+
+local function isEnemy(ent)
+	return ent ~= nil and ent.Targetable == true and (ent.Health or 0) > 0
+end
+
+-- best effort enemy shot watcher for AntiHit's projectile dodge: fast, small
+-- loose parts that appear near an enemy are treated as their shots
+task.spawn(function()
+	workspace.ChildAdded:Connect(function(obj)
+		if not obj:IsA('BasePart') or obj.Anchored then return end
+		task.defer(function()
+			if not obj.Parent then return end
+			local vel = obj.AssemblyLinearVelocity
+			if vel.Magnitude < 30 or obj.Size.Magnitude > 12 then return end
+			local origin = obj.Position
+			for _, ent in entitylib.List do
+				if ent.Targetable and ent.RootPart and ent.Health and ent.Health > 0 and (ent.RootPart.Position - origin).Magnitude < 40 then
+					vapeEvents.EnemyShot:Fire(ent, origin, vel, 60)
+					break
+				end
+			end
+		end)
+	end)
+end)
+
 for _, v in {'AutoClicker', 'TriggerBot', 'Jesus', 'AutoRejoin', 'Disabler', 'MurderMystery', 'Parkour', "Xray", "SafeWalk"} do
 	vape:Remove(v)
 end
@@ -285,7 +470,7 @@ run(function()
 	end
 
 	local function setBlock(handler, on)
-		if not (AutoBlock.Enabled and type(handler.tuning.block) == 'table') then return end
+		if not (AutoBlock.Enabled and handler.tuning and handler.tuning.block) then return end
 		if on == (handler.blocking == true) then return end
 		if on and not canAct() then return end
 		pcall(handler.SetBlock, handler, on)
@@ -336,7 +521,7 @@ run(function()
 			if list[i] and box.Adornee then pulse(box) end
 		end
 		task.delay(delay, function()
-			if not (Killaura.Enabled and entitylib.isAlive and ctx.alive and ctx.alive()) then return end
+			if not (Killaura.Enabled and entitylib.isAlive) or (ctx.alive and not ctx.alive()) then return end
 			local reach = AttackRange.Value
 			local hits = {}
 			for _, ent in list do
@@ -349,7 +534,7 @@ run(function()
 			local to = list[1].RootPart.Position
 			local dir = to - from
 			ctx.send('Swing', {
-				tool = ctx.tool,
+				tool = (tribes.State and tribes.State.tool) or ctx.tool,
 				dir = dir.Magnitude > 0.1 and dir.Unit or entitylib.character.RootPart.CFrame.LookVector,
 				hits = hits
 			})
@@ -1409,7 +1594,8 @@ run(function()
 					end
 
 					local handler, class = store.handler()
-					if class ~= 'Melee' or (handler and store.KIND[tribes.State.kind] == 'Melee' and tribes.State.kind == 'Fists') then
+					local state = tribes.State
+					if class ~= 'Melee' or (handler and state and state.kind and store.KIND[state.kind] == 'Melee' and state.kind == 'Fists') then
 						local tool = meleeTool()
 						if tool and not tool.Held then
 							store.equip(tool.Tool)
@@ -1696,7 +1882,7 @@ run(function()
 						end
 						local item = clear and healer()
 						if item then
-							local before = not item.Held and tribes.State.tool
+							local before = not item.Held and tribes.State and tribes.State.tool
 							if not item.Held then
 								store.equip(item.Tool)
 							end
@@ -1774,7 +1960,7 @@ run(function()
 				AutoRelease:Clean(runService.Heartbeat:Connect(function()
 					local handler, class = store.handler()
 					if not handler or not (class == 'Bow' or (class == 'Throw' and handler.winds)) then return end
-					if (handler.drawing or handler.winding) and handler:Charge() >= Charge.Value / 100 then
+					if (handler.drawing or handler.winding) and handler.Charge and handler:Charge() >= Charge.Value / 100 then
 						store.press(handler, false)
 					end
 				end))
@@ -1999,7 +2185,7 @@ run(function()
 						end
 					elseif class == 'Bow' or (class == 'Throw' and handler.winds) then
 						if handler.drawing or handler.winding then
-							if handler:Charge() >= Charge.Value / 100 then
+							if handler.Charge and handler:Charge() >= Charge.Value / 100 then
 								store.press(handler, false, ent)
 								mine = false
 							end
