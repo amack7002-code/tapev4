@@ -16560,6 +16560,7 @@ run(function()
 		'nigga',
 		'die pls',
 		'desire is some ass',
+		"Retard"
 	}
 	
 	local RGBColors = {
@@ -27146,10 +27147,46 @@ run(function()
     local lastUpdateTime = 0
     local renderStepName = 'InfiniteKrystalMovement'
     local originalKit
+    local momentumWarned = false
 
-    local equipKit = ReplicatedStorage
-        .rbxts_include.node_modules["@rbxts"]
-        .net.out._NetManaged.BedwarsActivateKit
+    local function getKrystalController()
+        local ok, res = pcall(function()
+            local knit = bedwars.Knit
+            if not knit then return nil end
+
+            local direct = knit.Controllers.GlacialSkaterController
+            if direct then return direct end
+
+            for name, controller in knit.Controllers do
+                if type(name) == 'string' then
+                    local lower = name:lower()
+                    if lower:find('glacial') or lower:find('skater') or lower:find('krystal') then
+                        return controller
+                    end
+                end
+            end
+            return nil
+        end)
+        return ok and res or nil
+    end
+
+    local function equipKit(kit)
+        local ok, res = pcall(function()
+            return replicatedStorage.rbxts_include.node_modules['@rbxts'].net.out._NetManaged.BedwarsActivateKit
+        end)
+        if not ok or not res then
+            warn("Failed to find BedwarsActivateKit remote:", res)
+            return false
+        end
+
+        local invoked, err = pcall(res.InvokeServer, res, {
+            kit = kit
+        })
+        if not invoked then
+            warn("Failed to equip kit ("..tostring(kit).."):", err)
+        end
+        return invoked
+    end
 
     InfKrystal = vape.Categories.Kits:CreateModule({
         Name = 'InfKrystal/AC Disabler',
@@ -27158,32 +27195,13 @@ run(function()
         Function = function(callback)
             if callback then
                 lastUpdateTime = 0
+                momentumWarned = false
                 originalKit = store.equippedKit
 
                 runService:UnbindFromRenderStep(renderStepName)
 
                 if originalKit ~= "glacial_skater" then
-                    local ok, err = pcall(function()
-                        equipKit:InvokeServer({
-                            kit = "glacial_skater"
-                        })
-                    end)
-
-                    if not ok then
-                        warn("Failed to equip krystal:", err)
-                    end
-                end
-
-                if originalKit and originalKit ~= "glacial_skater" then
-                    local ok, err = pcall(function()
-                        equipKit:InvokeServer({
-                            kit = tostring(originalKit)
-                        })
-                    end)
-
-                    if not ok then
-                        warn("Failed to restore original kit:", err)
-                    end
+                    equipKit("glacial_skater")
                 end
 
                 runService:BindToRenderStep(
@@ -27198,31 +27216,40 @@ run(function()
 
                         lastUpdateTime = currentTime
 
-                        local controller = bedwars.GlacialSkaterController
+                        local controller = getKrystalController()
                         if not controller then
                             return
                         end
 
-                        local ok, err = pcall(function()
-                            controller:updateMomentum(100, "newValue")
-                        end)
-
+                        local ok, err = pcall(controller.updateMomentum, controller, 100, "newValue")
                         if not ok then
-                            warn("Glacial Skater momentum update failed:", err)
+                            if not momentumWarned then
+                                momentumWarned = true
+                                warn("Glacial Skater momentum update failed:", err)
+                            end
+                        else
+                            momentumWarned = false
                         end
                     end
                 )
+
+                InfKrystal:Clean(function()
+                    runService:UnbindFromRenderStep(renderStepName)
+                end)
             else
                 runService:UnbindFromRenderStep(renderStepName)
 
                 pcall(function()
-                    if bedwars.GlacialSkaterController then
-                        bedwars.GlacialSkaterController:updateMomentum(
-                            0,
-                            "newValue"
-                        )
+                    local controller = getKrystalController()
+                    if controller then
+                        controller:updateMomentum(0, "newValue")
                     end
                 end)
+
+                if originalKit and originalKit ~= "" and originalKit ~= "glacial_skater" then
+                    equipKit(tostring(originalKit))
+                end
+                originalKit = nil
             end
         end
     })
