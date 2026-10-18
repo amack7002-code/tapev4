@@ -27146,7 +27146,7 @@ run(function()
     local UPDATE_INTERVAL = 0.016
     local lastUpdateTime = 0
     local renderStepName = 'InfiniteKrystalMovement'
-    local originalKit
+    local ReplaceKit
     local momentumWarned = false
 
     local function getKrystalController()
@@ -27188,6 +27188,14 @@ run(function()
         return invoked
     end
 
+    local function getReplacementKit(originalKit)
+        local custom = ReplaceKit.Value:gsub('%s', '')
+        if custom ~= '' then
+            return custom:lower()
+        end
+        return originalKit
+    end
+
     InfKrystal = vape.Categories.Kits:CreateModule({
         Name = 'InfKrystal/AC Disabler',
         Tooltip = 'Infinite Krystal movement + AC Disabler -- made by crobo',
@@ -27196,12 +27204,20 @@ run(function()
             if callback then
                 lastUpdateTime = 0
                 momentumWarned = false
-                originalKit = store.equippedKit
+                local originalKit = store.equippedKit
 
                 runService:UnbindFromRenderStep(renderStepName)
 
                 if originalKit ~= "glacial_skater" then
                     equipKit("glacial_skater")
+                end
+
+                -- equip krystal, then instantly swap to the replacement kit so the
+                -- server registers you on it while the Krystal controller keeps
+                -- running client side (the AC disabler part)
+                local replacement = getReplacementKit(originalKit)
+                if replacement and replacement ~= '' and replacement ~= "glacial_skater" then
+                    equipKit(replacement)
                 end
 
                 runService:BindToRenderStep(
@@ -27245,11 +27261,19 @@ run(function()
                         controller:updateMomentum(0, "newValue")
                     end
                 end)
+            end
+        end
+    })
 
-                if originalKit and originalKit ~= "" and originalKit ~= "glacial_skater" then
-                    equipKit(tostring(originalKit))
-                end
-                originalKit = nil
+    ReplaceKit = InfKrystal:CreateTextBox({
+        Name = 'Replace Kit',
+        Placeholder = 'kit id, e.g. yeti',
+        Tooltip = 'Kit to swap to right after Krystal gets equipped. Leave empty to swap back to the kit you had on.',
+        Function = function(enter)
+            if not (enter and InfKrystal.Enabled) then return end
+            local replacement = getReplacementKit('')
+            if replacement ~= '' then
+                equipKit(replacement)
             end
         end
     })
