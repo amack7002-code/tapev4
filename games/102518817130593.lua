@@ -81,69 +81,118 @@ run(function()
 	local rand = Random.new()
 	local kbEvent = MinecraftCombat:FindFirstChild('KnockbackAck') or MinecraftCombat:WaitForChild('KnockbackAck', 10)
 	local oldnamecall
-	local dampUntil = 0
-	local dampScale = Vector3.zero
-	local lastVelocity
+	local kbModule, oldApply
+	local lastDecision, lastDecisionAt = false, 0
 
 	local function shouldModify()
-		if rand:NextNumber(0, 100) >= Chance.Value then return false end
-		if Targetting.Enabled then
-			return entitylib.EntityPosition({
+		-- the local application and the server ack both call this for the same hit,
+		-- so the roll is shared for a short window to keep them in sync
+		if tick() - lastDecisionAt < 0.25 then
+			return lastDecision
+		end
+		local decision = rand:NextNumber(0, 100) < Chance.Value
+		if decision and Targetting.Enabled then
+			decision = entitylib.EntityPosition({
 				Range = 50,
 				Part = 'RootPart',
 				Players = true
 			}) ~= nil
 		end
-		return true
+		lastDecision, lastDecisionAt = decision, tick()
+		return decision
 	end
 
-	local function applyDamp()
-		local airborne = entitylib.isAlive and entitylib.character.Humanoid.FloorMaterial == Enum.Material.Air
-		if Mode.Value == 'Lag' then
-			-- eat the knockback for the delay window, then let the rest through late
-			local delay = (airborne and DelayAir.Value or DelayGround.Value) / 1000
-			dampUntil = tick() + delay
-			dampScale = Vector3.zero
-		else
-			-- scale the knockback by the sliders for the moment it lands
-			dampUntil = tick() + 0.3
-			dampScale = Vector3.new(Horizontal.Value / 100, Vertical.Value / 100, Horizontal.Value / 100)
+	local function findKnockbackModule()
+		-- the game's own knockback controller, with Apply/Step/ScaleHorizontal
+		local found
+		for _, m in replicatedStorage:GetDescendants() do
+			if m:IsA('ModuleScript') and m.Name:lower():find('knockback') then
+				local ok, res = pcall(require, m)
+				if ok and type(res) == 'table' and type(rawget(res, 'Apply')) == 'function' and type(rawget(res, 'Step')) == 'function' then
+					found = res
+					break
+				end
+			end
 		end
+
+		if not found and getconnections then
+			-- its simulation loop holds the module table as an upvalue
+			pcall(function()
+				for _, conn in getconnections(runService.PreSimulation) do
+					local f = conn and conn.Function
+					if type(f) == 'function' then
+						for i = 1, 6 do
+							local ok, upv = pcall(debug.getupvalue, f, i)
+							if ok and type(upv) == 'table' and type(rawget(upv, 'Apply')) == 'function' and type(rawget(upv, 'Step')) == 'function' and type(rawget(upv, 'ScaleHorizontal')) == 'function' then
+								found = upv
+								break
+							end
+						end
+					end
+					if found then break end
+				end
+			end)
+		end
+		return found
+	end
+
+	local function scaleVelocity(vel)
+		if typeof(vel) ~= 'Vector3' then return vel end
+		return vel * Vector3.new(Horizontal.Value / 100, Vertical.Value / 100, Horizontal.Value / 100)
+	end
+
+	local function currentDelay()
+		local airborne = entitylib.isAlive and entitylib.character.Humanoid.FloorMaterial == Enum.Material.Air
+		return (airborne and DelayAir.Value or DelayGround.Value) / 1000
 	end
 
 	Velocity = vape.Categories.Combat:CreateModule({
 		Name = 'Velocity',
 		Function = function(callback)
 			if callback then
-				-- we own our own physics, so damping the velocity change right after
-				-- a hit works no matter which side ends up applying the knockback
-				Velocity:Clean(runService.Heartbeat:Connect(function()
-					local root = entitylib.isAlive and entitylib.character.RootPart
-					if not root then
-						lastVelocity = nil
-						return
-					end
-					local vel = root.AssemblyLinearVelocity
-					if tick() < dampUntil and lastVelocity then
-						local delta = vel - lastVelocity
-						root.AssemblyLinearVelocity = lastVelocity + delta * dampScale
-					else
-						lastVelocity = vel
-					end
-				end))
-
-				if kbEvent then
-					-- the knockback is acked to the server through this remote
-					oldnamecall = hookmetamethod(game, '__namecall', function(...)
-						local self, method = ..., getnamecallmethod()
-						if self == kbEvent and (method == 'FireServer' or method == 'InvokeServer') and shouldModify() then
-							applyDamp()
-							if method == 'FireServer' and Mode.Value == 'Lag' then
-								-- the ack itself goes out late so the server registers the hit late
-								local airborne = entitylib.isAlive and entitylib.character.Humanoid.FloorMaterial == Enum.Material.Air
-								task.delay((airborne and DelayAir.Value or DelayGround.Value) / 1000, oldnamecall, self, ...)
+				-- the game applies knockback locally through its own module:
+				-- Knockback.Apply(character, velocity)
+				kbModule = kbModule or findKnockbackModule()
+				if kbModule then
+					oldApply = kbModule.Apply
+					kbModule.Apply = function(char, vel, ...)
+						if char == lplr.Character and shouldModify() then
+							if Mode.Value == 'Lag' then
+								-- the knockback starts late
+								task.delay(currentDelay(), oldApply, char, vel, ...)
 								return
 							end
+							vel = scaleVelocity(vel)
+						end
+						return oldApply(char, vel, ...)
+					end
+					Velocity:Clean(function()
+						if oldApply then
+							kbModule.Apply = oldApply
+							oldApply = nil
+						end
+					end)
+				end
+
+				-- and the client acks it to the server with the velocity it took:
+				-- KnockbackAck:FireServer(id, playerName, velocity)
+				if kbEvent then
+					oldnamecall = hookmetamethod(game, '__namecall', function(...)
+						local self, method = ..., getnamecallmethod()
+						if self == kbEvent and method == 'FireServer' and shouldModify() then
+							local args = table.pack(...)
+
+							if Mode.Value == 'Lag' then
+								-- the ack goes out late so the server registers it late
+								task.delay(currentDelay(), oldnamecall, unpack(args, 1, args.n))
+								return
+							end
+
+							-- the server applies whatever velocity we ack, so scale it too
+							if typeof(args[3]) == 'Vector3' then
+								args[3] = scaleVelocity(args[3])
+							end
+							return oldnamecall(unpack(args, 1, args.n))
 						end
 						return oldnamecall(...)
 					end)
@@ -153,19 +202,7 @@ run(function()
 							oldnamecall = nil
 						end
 					end)
-
-					-- if the server is the side announcing the knockback, that works as the trigger too
-					if kbEvent.OnClientEvent then
-						Velocity:Clean(kbEvent.OnClientEvent:Connect(function()
-							if shouldModify() then
-								applyDamp()
-							end
-						end))
-					end
 				end
-			else
-				dampUntil = 0
-				lastVelocity = nil
 			end
 		end,
 		Tooltip = 'control you to edit ur knockback'
