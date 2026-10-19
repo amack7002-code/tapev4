@@ -306,7 +306,7 @@ run(function()
         shared.seq = 0
     end
 
-    local lastSwing, lastAttack = 0, 0
+    local lastAttack = 0
     local function getKillauraValues(range, angle, wallcheck) -- haha very funny gpt moment (it's not, i can assure :/)
         if not isAlive(lplr.Character) then return end
         if Dependencies.isBlocked() then return end
@@ -341,15 +341,13 @@ run(function()
                         if entity then
                             if workspace.SkySpawn.CourtyardArchitecture['Arena red wool floor edge'].Position.Y <= lplr.Character.PrimaryPart.Position.Y then continue end
 
-                            if swing.Value and os.clock() >= lastSwing then
-                                Dependencies.vmSwing = os.clock()
-                                lastSwing = os.clock() + math.max(0.15, attackInterval.Value)
-
-                                lplr.Character:SetAttribute('LocalAttackSwing', os.clock())
-                            end
-
                             if attackInterval.Value and os.clock() >= lastAttack then
                                 lastAttack = os.clock() + attackInterval.Value
+
+                                if swing.Value then
+                                    Dependencies.vmSwing = os.clock()
+                                    lplr.Character:SetAttribute('LocalAttackSwing', os.clock())
+                                end
 
                                 shared.seq += 1
                                 local payload = {
@@ -413,7 +411,7 @@ run(function()
     })
     swing = killaura:CreateToggle({
         Name = 'Swing',
-        Default = false,
+        Default = true,
         Function = function() end,
         Tooltip = 'Automatically plays the swing animation.'
     })
