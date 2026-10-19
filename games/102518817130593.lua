@@ -171,8 +171,8 @@ local ControllerInput = {
 }
 
 local Dependencies = {
-    Geometry = require(ReplicatedStorage.MinecraftMeleeGeometry),
-    HitVisuals = require(ReplicatedStorage.MeleeHitVisuals),
+    Geometry = MinecraftMeleeGeometry,
+    HitVisuals = MeleeHitVisuals,
     isBlocked = ControllerInput.IsBlocked,
     vmSwing = -10
 }
@@ -361,7 +361,7 @@ run(function()
                                 }
 
                                 Dependencies.HitVisuals.Predict(entity.char)
-                                ReplicatedStorage.MinecraftCombat.Attack:FireServer(entity.char, entity.eye + entity.dir * entity.dist, entity.dir, nil, payload)
+                                replicatedStorage.MinecraftCombat.Attack:FireServer(entity.char, entity.eye + entity.dir * entity.dist, entity.dir, nil, payload)
                             end
                         end
                     end
