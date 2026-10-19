@@ -325,10 +325,11 @@ run(function()
     end
 
     local killaura, attackInterval, range, angle, itemCheck, wallCheck, swing
-    killaura = vape.Categories.Combat:CreateModule({
+    killaura = vape.Categories.Blatant:CreateModule({
         Name = 'Killaura',
         Function = function(callback)
             if callback then
+                task.spawn(function()
                 repeat
                     task.wait()
 
@@ -367,6 +368,7 @@ run(function()
                         end
                     end
                 until not killaura.Enabled
+                end)
             end
         end,
         Tooltip = 'Automatically attacks players around you.'
