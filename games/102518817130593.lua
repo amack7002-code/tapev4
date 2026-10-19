@@ -375,9 +375,10 @@ run(function()
     })
     attackInterval = killaura:CreateSlider({
         Name = 'Attack Interval',
-        Min = 0.05,
+        Min = 0.1,
         Max = 1,
-        Default = 0.05,
+        Default = 0.5,
+        Decimal = 100,
         Function = function() end,
         Suffix = 's'
     })
@@ -386,6 +387,7 @@ run(function()
         Min = 1,
         Max = 11.25,
         Default = 11.25,
+        Decimal = 100,
         Function = function() end,
         Suffix = 'studs'
     })
