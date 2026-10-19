@@ -6,6 +6,7 @@ local replicatedStorage = cloneref(game:GetService('ReplicatedStorage'))
 local inputService = cloneref(game:GetService('UserInputService'))
 local tweenService = cloneref(game:GetService('TweenService'))
 local runService = cloneref(game:GetService('RunService'))
+local guiService = cloneref(game:GetService('GuiService'))
 local httpService = cloneref(game:GetService('HttpService'))
 local virtualUser = cloneref(game:GetService('VirtualUser'))
 local lplr = playersService.LocalPlayer
@@ -100,7 +101,7 @@ local function decompile(scriptPath: ModuleScript | LocalScript): string
     local okRequest: boolean, httpResult = pcall(request, {
         Url = 'https://api.lua.expert/decompile',
         Method = 'POST',
-        Body = HttpService:JSONEncode({
+        Body = httpService:JSONEncode({
             script = base64encode(bytecode),
         }),
         Headers = {
@@ -152,9 +153,9 @@ local ControllerInput = {
         if lplr:GetAttribute('DuelMenuOpen') or lplr:GetAttribute('DuelFrozen') or lplr:GetAttribute('SettingsOpen') then
         	MenuIsOpen = true
         else
-        	MenuIsOpen = GuiService.MenuIsOpen
+        	MenuIsOpen = guiService.MenuIsOpen
             if not MenuIsOpen then
-            	if not UserInputService:GetFocusedTextBox() then
+            	if not inputService:GetFocusedTextBox() then
             		if lplr:GetAttribute('UpgradeShopOpen') or lplr:GetAttribute('RobuxShopOpen') or lplr:GetAttribute('CosmeticsOpen') or lplr:GetAttribute('CosmeticCrateOpen') then
             			MenuIsOpen = true
             		else
@@ -181,7 +182,7 @@ do
     local restP, unstableSince, lastClone, parts = nil, nil, nil, {}
 
     pcall(function()
-    	RunService:UnbindFromRenderStep('Swing')
+    	runService:UnbindFromRenderStep('Swing')
     end)
 
     local function getViewmodel()
@@ -200,7 +201,7 @@ do
         return CFrame.new(p + off) * yaw * v6 * yaw:Inverse() * CFrame.new(-p)
     end
 
-    RunService:BindToRenderStep('Swing', Enum.RenderPriority.Last.Value + 101, function()
+    runService:BindToRenderStep('Swing', Enum.RenderPriority.Last.Value + 101, function()
     	local cam, orig, clone = getViewmodel()
         if not cam then return end
         
