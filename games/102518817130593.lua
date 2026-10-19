@@ -259,8 +259,10 @@ for _, v in {'PlayerModel', 'Search', 'Waypoints', 'Disabler', 'MurderMystery', 
 end
 
 
+
 run(function()
     local sprint
+    local sendInt
 
     sprint = vape.Categories.Combat:CreateModule({
         Name = 'Sprint',
@@ -270,12 +272,13 @@ run(function()
 
                 sprint:Clean(function()
                     running = false
+                    Sprint:FireServer(false)
                 end)
 
                 task.spawn(function()
                     while running and sprint.Enabled do
                         Sprint:FireServer(true)
-                        task.wait()
+                        task.wait(sendInt.Value)
                     end
                 end)
             else
@@ -284,7 +287,18 @@ run(function()
         end,
         Tooltip = 'sprints for you gng'
     })
+
+    sendInt = sprint:CreateSlider({
+        Name = 'Send Interval',
+        Min = 0.001,
+        Max = 1,
+        Default = 0.1,
+        Decimal = 1000,
+        Function = function() end,
+        Suffix = 's'
+    })
 end)
+
 
 run(function()
 	local Velocity
