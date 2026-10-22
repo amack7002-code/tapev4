@@ -739,6 +739,15 @@ local get_foe_move = function(core, pos, vel, inair, plr_grav)
 
 	local count = track.samples
 	table.insert(count, {position = pos, time = t2})
+	local rise_log = track.riseLog
+	if not rise_log then
+		rise_log = {}
+		track.riseLog = rise_log
+	end
+	table.insert(rise_log, {pos.Y, t2})
+	while #rise_log > 2 and t2 - rise_log[1][2] > 0.5 do
+		table.remove(rise_log, 1)
+	end
 	while #count > 6 or (#count > 2 and t2 - count[1].time > 0.14) do
 		table.remove(count, 1)
 	end
@@ -1620,12 +1629,7 @@ aimlib.SolveTrajectory = function(from2, shot_spd, grav, foe_pos, foe_vel, plr_g
 		end
 	end
 	local foe_accel = Vector3.zero
-	local rise_state = move.state
-	local steady_rise = rise_state ~= nil and foe_inair and not move.knockback and not move.flying
-		and foe_vel.Y > 4 and (rise_state.airTime or 0) > 0.25
-		and rise_state.verticalAcceleration ~= nil and rise_state.verticalAcceleration > -plr_grav * 0.4
-		and not (rise_state.jumpStart and workspace:GetServerTimeNow() - rise_state.jumpStart < 0.45)
-	if plr_grav > 0 and (foe_inair or foe_vel.Y < -1) and not move.flying and not steady_rise then
+	if plr_grav > 0 and (foe_inair or foe_vel.Y < -1) and not move.flying then
 		foe_accel = Vector3.new(0, -plr_grav, 0)
 	end
 	local flat_accel = move.acceleration
@@ -1723,7 +1727,7 @@ aimlib.SolveTrajectory = function(from2, shot_spd, grav, foe_pos, foe_vel, plr_g
 				foe_accel = Vector3.zero
 			end
 		end
-		if ground_y and (foe_accel.Y < 0 or hop_vel) and not move.flying and not steady_rise then
+		if ground_y and (foe_accel.Y < 0 or hop_vel) and not move.flying then
 			local landing, grounded = calc_landing_t(foe_core_pos.Y, ground_y + plr_tall, foe_vel.Y, plr_grav)
 			local flat = foe_vel * flat_mask
 			local ground_route = not move.knockback and not move.flying and get_key_route(move.state, workspace:GetServerTimeNow())
@@ -1988,8 +1992,29 @@ aimlib.SolveTrajectory = function(from2, shot_spd, grav, foe_pos, foe_vel, plr_g
 				fire_vel, t2 = ground_vel, ground_t
 			end
 		end
+		local rise_log = move.state and move.state.riseLog
+		if rise_log and #rise_log >= 4 and ground_limit and not move.knockback and not move.flying and foe_vel.Y > 2
+			and (seen_vel * flat_mask).Magnitude < 8 and foe_core_pos.Y + foe_shift.Y - ground_limit <= 1.5 and valid_vector(future_foe) then
+			local first, last = rise_log[1], rise_log[#rise_log]
+			local span = last[2] - first[2]
+			local rate = span >= 0.3 and (last[1] - first[1]) / span or 0
+			if rate > 4 then
+				local tower_y = foe_core_pos.Y + foe_shift.Y + rate * (lag + t2)
+				if future_foe.Y < tower_y then
+					future_foe = Vector3.new(future_foe.X, tower_y, future_foe.Z)
+					local tower_vel, tower_t = calc_static_fire(from2, future_foe, shot_spd, shot_accel)
+					if tower_vel and tower_t then
+						fire_vel, t2 = tower_vel, tower_t
+					end
+				end
+			end
+		end
 		if climb_step and hop_period and hop_period > 0 and move.state and move.state.jumpBase and move.state.jumpStart and valid_vector(future_foe) then
-			local climb_y = move.state.jumpBase + foe_shift.Y + (climb_step / hop_period) * (workspace:GetServerTimeNow() - move.state.jumpStart + lag + t2)
+			local since = math.max(workspace:GetServerTimeNow() - move.state.jumpStart + lag + t2, 0)
+			local cycles = math.floor(since / hop_period)
+			local phase = since - cycles * hop_period
+			local climb_jump = move.state.jumpVelocity or 42.6
+			local climb_y = move.state.jumpBase + foe_shift.Y + cycles * climb_step + math.max(climb_jump * phase - 0.5 * plr_grav * phase * phase, 0)
 			if future_foe.Y < climb_y then
 				future_foe = Vector3.new(future_foe.X, climb_y, future_foe.Z)
 				local climb_vel, climb_t = calc_static_fire(from2, future_foe, shot_spd, shot_accel)
@@ -2010,33 +2035,8 @@ aimlib.SolveTrajectory = function(from2, shot_spd, grav, foe_pos, foe_vel, plr_g
 				end
 			end
 		end
-		if not foe_inair and ground_limit and plr_grav > 0 and not move.knockback and not move.flying and valid_vector(future_foe) then
-			local walk = seen_vel * flat_mask
-			local reach = lag + t2
-			if walk.Magnitude > 4 and reach > 0.05 then
-				local floor_now = ground_limit - foe_shift.Y - plr_tall
-				for step = 1, 4 do
-					local probe = trace_ground(seen_pos - foe_shift + walk * (reach * step / 4), cast, foe_core)
-					if probe == nil or probe < floor_now - 1.5 then
-						local fall_t = reach - reach * (step - 1) / 4
-						local dropped = ground_limit - 0.5 * plr_grav * fall_t * fall_t
-						if probe then
-							dropped = math.max(dropped, probe + plr_tall + foe_shift.Y)
-						end
-						if dropped < future_foe.Y then
-							future_foe = Vector3.new(future_foe.X, dropped, future_foe.Z)
-							local drop_vel, drop_t = calc_static_fire(from2, future_foe, shot_spd, shot_accel)
-							if drop_vel and drop_t then
-								fire_vel, t2 = drop_vel, drop_t
-							end
-						end
-						break
-					end
-				end
-			end
-		end
 		local hop_state = move.state
-		if not steady_rise and not climb_step and ground_limit and not move.knockback and not move.flying and plr_grav > 0 and hop_state and (hop_state.jumpSeen or 0) >= 2 and hop_state.jumpPeriod and hop_state.jumpStart and valid_vector(future_foe) then
+		if not climb_step and ground_limit and not move.knockback and not move.flying and plr_grav > 0 and hop_state and (hop_state.jumpSeen or 0) >= 2 and hop_state.jumpPeriod and hop_state.jumpStart and valid_vector(future_foe) then
 			local period = hop_state.jumpPeriod
 			local jv = hop_state.jumpVelocity or 42.6
 			local since = workspace:GetServerTimeNow() - hop_state.jumpStart + lag + t2
