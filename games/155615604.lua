@@ -306,7 +306,7 @@ run(function()
 			return false
 		end
 
-		return entity.Health > 0 and entity.Humanoid:GetState() ~= Enum.HumanoidStateType.Dead and entity.SpawnTime < os.clock() and not entity.Character.FindFirstChildWhichIsA(entity.Character, 'ForceField') and (entity.Player.Team ~= teams.Inmates or (skipCheck or entity.Character:GetAttribute('Trespassing') or entity.Character:GetAttribute('Hostile')))
+		return entity.Health > 0 and entity.Humanoid:GetState() ~= Enum.HumanoidStateType.Dead and entity.SpawnTime < os.clock() and not entity.Character:FindFirstChildWhichIsA(entity.Character, 'ForceField') and (entity.Player.Team ~= teams.Inmates or (skipCheck or entity.Character:GetAttribute('Trespassing') or entity.Character:GetAttribute('Hostile')))
 	end
 
 	entitylib.EntityMouse = function(entitysettings)
