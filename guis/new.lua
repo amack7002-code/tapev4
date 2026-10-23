@@ -1,6 +1,3 @@
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
 local mainapi = {
 	Categories = {},
 	GUIColor = {
@@ -1521,6 +1518,21 @@ local function loadJson(path)
 		return httpService:JSONDecode(readfile(path))
 	end)
 	return suc and type(res) == 'table' and res or nil
+end
+local function loadJsonSafe(path)
+	return loadJson(path) or loadJson(path..'.bak')
+end
+local function safeWrite(path, text)
+	for _ = 1, 2 do
+		if pcall(writefile, path, text) then
+			local ok, back = pcall(readfile, path)
+			if ok and back == text then
+				pcall(writefile, path..'.bak', text)
+				return true
+			end
+		end
+	end
+	return false
 end
 local draggableids = {}
 
@@ -7998,13 +8010,12 @@ function mainapi:CreateNotification(title, text, duration, type)
 end
 
 function mainapi:Load(skipgui, profile)
+	self.Loading = true
 	if not skipgui then
 		self.GUIColor:SetValue(nil, nil, nil, 4)
 	end
 
 	local guidata = {Categories = {}}
-	local savecheck = true
-
 	local guiFile = 'aerov4/profiles/'..self.Place..'.gui.txt'
 	local sharedGuiFile = 'aerov4/profiles/'..game.GameId..'.gui.txt'
 	if not isfile(guiFile) and guiFile ~= sharedGuiFile and isfile(sharedGuiFile) then
@@ -8013,13 +8024,12 @@ function mainapi:Load(skipgui, profile)
 		end)
 	end
 
-	if isfile(guiFile) then
-		local success, result = pcall(loadJson, guiFile)
-		if success and result then
+	if isfile(guiFile) or isfile(guiFile..'.bak') then
+		local result = loadJsonSafe(guiFile)
+		if result then
 			guidata = result
 		else
-			self:CreateNotification('Vape', 'Failed to load GUI settings. Using defaults.', 10, 'alert')
-			savecheck = false
+			self:CreateNotification('aerov4', 'Failed to load GUI settings. Using defaults.', 10, 'alert')
 		end
 
 		if guidata.MobileSettings then
@@ -8110,19 +8120,15 @@ function mainapi:Load(skipgui, profile)
 	local profileFile = 'aerov4/profiles/'..self.Profile..self.Place..'.txt'
 	local savedata = { Categories = {}, Modules = {}, Legit = {} }
 
-	if isfile(profileFile) then
-		local success, result = pcall(loadJson, profileFile)
-		
-		if success and result then
+	if isfile(profileFile) or isfile(profileFile..'.bak') then
+		local result = loadJsonSafe(profileFile)
+		if result then
 			savedata = result
 		else
-			self:CreateNotification('Vape', 'Failed to load '..self.Profile..' profile. Creating a new one.', 10, 'alert')
-			savecheck = false
-			self:Save()
+			self:CreateNotification('aerov4', 'Failed to load '..self.Profile..' profile. Creating a new one.', 10, 'alert')
 		end
 	else
-		self:CreateNotification('Vape', 'No profile found. Creating new profile for '..self.Profile, 8, 'info')
-		self:Save()
+		self:CreateNotification('aerov4', 'No profile found. Creating new profile for '..self.Profile, 8, 'info')
 	end
 
 	for i, v in savedata.Categories or {} do
@@ -8160,16 +8166,22 @@ function mainapi:Load(skipgui, profile)
 	applyPositions()
 	task.delay(3, applyPositions)
 
-	for i, v in savedata.Modules or {} do
-		local object = self.Modules[i]
-		if not object then continue end
+	local savedModules = savedata.Modules or {}
+	for i, object in self.Modules do
+		local base = self.DefaultProfileData and self.DefaultProfileData.Modules[i]
+		local v = savedModules[i]
+		if not v and not base then continue end
+		v = v or {Enabled = false, Bind = {}, Pinned = false, KeybindMode = 'Toggle'}
 
+		if object.Options and base and base.Options then
+			self:LoadOptions(object, base.Options)
+		end
 		if object.Options and v.Options then
 			self:LoadOptions(object, v.Options)
 		end
 		if object.SetVisible then object:SetVisible(v.Visible ~= false) end
 
-		if v.Enabled ~= object.Enabled then
+		if (v.Enabled or false) ~= (object.Enabled or false) then
 			if self.ThreadFix then
 				setthreadidentity(8)
 			end
@@ -8196,7 +8208,7 @@ function mainapi:Load(skipgui, profile)
 			end
 		end
 
-		if v.Pinned and not object.Pinned then
+		if (v.Pinned and true or false) ~= (object.Pinned and true or false) then
 			pcall(function()
 				local pinButton = object.Object:FindFirstChild('Favorite')
 				if pinButton then
@@ -8223,9 +8235,15 @@ function mainapi:Load(skipgui, profile)
 		end
 	end
 
-	for i, v in savedata.Legit or {} do
-		local object = self.Legit.Modules[i]
-		if not object then continue end
+	local savedLegit = savedata.Legit or {}
+	for i, object in self.Legit.Modules do
+		local base = self.DefaultProfileData and self.DefaultProfileData.Legit[i]
+		local v = savedLegit[i]
+		if not v and not base then continue end
+		v = v or {Enabled = false}
+		if object.Options and base and base.Options then
+			self:LoadOptions(object, base.Options)
+		end
 		if object.Options and v.Options then
 			self:LoadOptions(object, v.Options)
 		end
@@ -8254,7 +8272,8 @@ function mainapi:Load(skipgui, profile)
 		setthreadidentity(8)
 	end
 
-	self.Loaded = savecheck
+	self.Loaded = true
+	self.Loading = false
 	self:CreateNotification('Profiles', "<font color='#FFFFFF'>"..self.Profile.."</font> profile loaded", 3)
 	self.Categories.Main.Options.Bind:SetBind(self.Keybind)
 	if inputService.TouchEnabled and #self.Keybind == 1 and self.Keybind[1] == 'RightShift' then
@@ -8334,7 +8353,7 @@ end
 
 function mainapi:Save(newprofile)
 	if mainapi.ThreadFix then setthreadidentity(8) end
-	if not self.Loaded then return end
+	if not self.Loaded or self.Loading then return end
 
 	local guidata = {
 		Categories = {},
@@ -8425,8 +8444,8 @@ function mainapi:Save(newprofile)
 		}
 	end
 
-	writefile('aerov4/profiles/' .. self.Place .. '.gui.txt', httpService:JSONEncode(guidata))
-	writefile('aerov4/profiles/' .. self.Profile .. self.Place .. '.txt', httpService:JSONEncode(savedata))
+	safeWrite('aerov4/profiles/' .. self.Place .. '.gui.txt', httpService:JSONEncode(guidata))
+	safeWrite('aerov4/profiles/' .. self.Profile .. self.Place .. '.txt', httpService:JSONEncode(savedata))
 end
 
 function mainapi:SaveOptions(object, savedoptions)
