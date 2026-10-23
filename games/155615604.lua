@@ -512,7 +512,10 @@ run(function()
 		return text
 	end, false)
 
-	if type(whitelist.tagcallback) == 'table' then
+	if type(whitelist.tagcallback) ~= 'table' then
+		whitelist.tagcallback = {}
+	end
+
 		table.insert(whitelist.tagcallback, function(plr, plrtag, rich)
 			if plr then
 				local entity = entitylib.getEntity(plr)
