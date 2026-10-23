@@ -516,47 +516,44 @@ run(function()
 		whitelist.tagcallback = {}
 	end
 
-		table.insert(whitelist.tagcallback, function(plr, plrtag, rich)
-			if plr then
-				local entity = entitylib.getEntity(plr)
+	table.insert(whitelist.tagcallback, function(plr, plrtag, rich)
+		if plr then
+			local entity = entitylib.getEntity(plr)
 
-				if entity then
-					if Cheats.Flagged[plr.UserId] then
+			if entity then
+				if Cheats.Flagged[plr.UserId] then
+					table.insert(plrtag, {
+						text = rich and '⚠️' or 'Cheater'
+					})
+				end
+
+				if plr.Team == teams.Inmates then
+					if entity.Character:GetAttribute('Hostile') then
 						table.insert(plrtag, {
-							text = rich and '⚠️' or 'Cheater'
+							text = rich and '💢' or 'Hostile'
+						})
+					elseif entity.Character:GetAttribute('Trespassing') then
+						table.insert(plrtag, {
+							text = rich and '🔗' or 'Trespassing'
 						})
 					end
+				elseif plr.Team == teams.Guards then
+					local count = plr:GetAttribute('InnocentKills') or 0
 
-					if plr.Team == teams.Inmates then
-						if entity.Character:GetAttribute('Hostile') then
-							table.insert(plrtag, {
-								text = rich and '💢' or 'Hostile'
-							})
-						elseif entity.Character:GetAttribute('Trespassing') then
-							table.insert(plrtag, {
-								text = rich and '🔗' or 'Trespassing'
-							})
-						end
-					elseif plr.Team == teams.Guards then
-						local count = plr:GetAttribute('InnocentKills') or 0
-
-						if count > 0 then
-							table.insert(plrtag, {
-								text = tostring(count),
-								color = Color3.fromHSV(
-									math.clamp(1 - (count / 2), 0, 1) / 2.5,
-									0.89,
-									0.75
-								)
-							})
-						end
+					if count > 0 then
+						table.insert(plrtag, {
+							text = tostring(count),
+							color = Color3.fromHSV(
+								math.clamp(1 - (count / 2), 0, 1) / 2.5,
+								0.89,
+								0.75
+							)
+						})
 					end
 				end
 			end
-		end)
-	else
-		warn('[Module Error] whitelist.tagcallback is missing or is not a table')
-	end
+		end
+	end)
 
 	task.spawn(function()
 		gamepasses = {
