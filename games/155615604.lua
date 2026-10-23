@@ -2042,3 +2042,1212 @@ run(function()
 	Tooltip = 'Allow you to shoot through vehicles.'
 })
 end)
+
+
+run(function()
+	local SilentAim
+	local mouseClicked
+	local Target
+	local Mode
+	local Range
+	local HitChance
+	local HeadshotChance
+	local AutoFire = {Enabled = false}
+	local AutoFireRate
+	local AutoFireTaser
+	local AutoFireSwitch
+	local Wallbang
+	local CircleColor
+	local CircleTransparency
+	local CircleFilled
+	local CircleObject
+	local rand = Random.new()
+	local old
+
+	local function getMousePosition()
+		if inputService.TouchEnabled then
+			return gameCamera.ViewportSize / 2
+		end
+
+		return inputService.GetMouseLocation(inputService)
+	end
+
+	local function getShootTool(range)
+		local tool = lplr.Character:FindFirstChildWhichIsA('Tool')
+		if tool and tool:GetAttribute('FireRate') and (not tool:GetAttribute('Local_IsShooting')) and (tool:GetAttribute('Local_ReloadSession') or 0) <= 0 and (tool:GetAttribute('Local_CurrentAmmo') or 1) > 0 then
+			local dist = tool:GetAttribute('Range') or 0
+			if dist > range then
+				return tool
+			end
+		end
+
+		local backpack = lplr:FindFirstChildWhichIsA('Backpack')
+		if backpack then
+			for _, tool in backpack:GetChildren() do
+				if tool:IsA('Tool') and tool:GetAttribute('FireRate') and (not tool:GetAttribute('Local_IsShooting')) and (tool:GetAttribute('Local_ReloadSession') or 0) <= 0 and tool.Name ~= 'Taser' then
+					local dist = tool:GetAttribute('Range') or 0
+					if dist > range then
+						return tool
+					end
+				end
+			end
+		end
+	end
+
+	local function getMaxRange()
+		local mag = 0
+		local tool = lplr.Character:FindFirstChildWhichIsA('Tool')
+		if tool and tool:GetAttribute('Range') and (tool:GetAttribute('Local_ReloadSession') or 0) <= 0 then
+			local dist = tool:GetAttribute('Range')
+			if dist > mag then
+				mag = dist
+			end
+		end
+
+		local backpack = lplr:FindFirstChildWhichIsA('Backpack')
+		if backpack then
+			for _, tool in backpack:GetChildren() do
+				if tool:IsA('Tool') and tool:GetAttribute('Range') and (tool:GetAttribute('Local_ReloadSession') or 0) <= 0 and tool.Name ~= 'Taser' then
+					local dist = tool:GetAttribute('Range')
+					if dist > mag then
+						mag = dist
+					end
+				end
+			end
+		end
+
+		return mag
+	end
+
+	local function getTarget(origin, limit, attackcheck)
+		if rand.NextNumber(rand, 0, 100) > (AutoFire.Enabled and 100 or HitChance.Value) then
+			return
+		end
+
+		local targetPart = (rand.NextNumber(rand, 0, 100) < (AutoFire.Enabled and 100 or HeadshotChance.Value)) and 'Head' or 'RootPart'
+		local entity = entitylib['Entity'..Mode.Value]({
+			Range = Mode.Value == 'Position' and math.min(Range.Value, limit) or Range.Value,
+			RangePosition = limit,
+			AttackCheck = attackcheck,
+			Wallcheck = Target.Walls.Enabled and true or nil,
+			Wallbang = Wallbang.Enabled and entitylib.character.RootPart.Position or nil,
+			Part = targetPart,
+			Origin = origin,
+			Players = Target.Players.Enabled,
+			NPCs = Target.NPCs.Enabled
+		})
+
+		if entity then
+			targetinfo.Targets[entity] = os.clock() + 1
+		end
+
+		return entity, entity and entity[targetPart], origin
+	end
+
+	local function Hook(...)
+		local origin, direction = ...
+		local gundata = debug.getupvalue(oldshoot or pl.Shoot, 10)
+		local entity, targetPart, origin = getTarget(origin, gundata and gundata.Range or 1000, not gundata or gundata.Behavior ~= 'Taser')
+
+		if not entity then
+			return old(...)
+		end
+
+		local args = table.pack(...)
+		args[2] = targetPart.Position
+		aimTimer = os.clock() + 0.3
+		aimVec = args[2]
+
+		if Wallbang.Enabled then
+			local ray
+			if not OriginScanner.Cache[targetPart] then
+				ray = workspace:Raycast(args[2], (origin - args[2]), OriginScanner.Ray)
+			end
+
+			if OriginScanner.Cache[targetPart] or ray or workspace:Raycast(origin, (args[2] - origin), OriginScanner.Ray) then
+				local newOrigin, hit = OriginScanner:Scan(entitylib.character.RootPart.Position, args[2], ray and ray.Position + ray.Normal * 0.01 or nil, targetPart, entity)
+
+				if newOrigin then
+					for index, value in debug.getstack(3) do
+						if value == origin then
+							debug.setstack(3, index, newOrigin)
+						end
+					end
+
+					args[1] = newOrigin
+					if hit then
+						return targetPart, hit
+					end
+				end
+			end
+		end
+
+		return old(unpack(args, 1, args.n))
+	end
+
+	SilentAim = vape.Categories.Combat:CreateModule({
+		Name = 'SilentAim',
+		Function = function(callback)
+			if CircleObject then
+				CircleObject.Visible = callback and Mode.Value == 'Mouse'
+			end
+
+			if callback then
+				old = hookfunction(pl.Bullet, function(...)
+					return Hook(...)
+				end)
+
+				local fireDelay = os.clock()
+				repeat
+					if CircleObject then
+						CircleObject.Position = getMousePosition()
+					end
+
+					if AutoFire.Enabled and fireDelay < os.clock() then
+						fireDelay = os.clock() + (1 / AutoFireRate.Value)
+
+						local tool = lplr.Character:FindFirstChildWhichIsA('Tool')
+						local gundata = debug.getupvalue(oldshoot or pl.Shoot, 10)
+						if tool and gundata then
+							local limit = AutoFireSwitch.Enabled and getMaxRange() or gundata.Range or 1000
+							local taser = gundata and gundata.Behavior == 'Taser'
+							local entity = entitylib['Entity'..Mode.Value]({
+								Range = Mode.Value == 'Position' and math.min(Range.Value, limit) or Range.Value,
+								RangePosition = limit,
+								AttackCheck = not taser,
+								Wallcheck = Target.Walls.Enabled and true or nil,
+								Wallbang = Wallbang.Enabled and entitylib.isAlive and entitylib.character.RootPart.Position or nil,
+								Part = 'Head',
+								Origin = entitylib.isAlive and entitylib.character.Head.Position or Vector3.zero,
+								Players = Target.Players.Enabled
+							})
+
+							if entity and entitylib.character.Humanoid.Health > 0 then
+								local ammo = (tool:GetAttribute('Local_CurrentAmmo') or 0)
+								local canFire = not tool:GetAttribute('Local_IsShooting') and ammo > 0
+								if AutoFireSwitch.Enabled then
+									local ideal = getShootTool((entity.Head.Position - entitylib.character.Head.Position).Magnitude)
+									if ideal and tool ~= ideal then
+										entitylib.character.Humanoid:EquipTool(ideal)
+										canFire = false
+									end
+								end
+
+								if canFire and not ((taser or AutoFireTaser.Enabled) and (entity.Character:GetAttribute('Tased') or entity.Character:GetAttribute('Arrested'))) then
+									fireDelay = os.clock() + (AutoFireSwitch.Enabled and 0.05 or ammo > 1 and gundata.FireRate or 1 / AutoFireRate.Value)
+									local obj = {UserInputState = Enum.UserInputState.Begin, UserInputType = Enum.UserInputType.MouseButton1, Position = Vector3.zero}
+									task.spawn(pl.Shoot, obj)
+									obj.UserInputState = Enum.UserInputState.End
+								end
+							end
+						end
+					end
+
+					task.wait()
+				until not SilentAim.Enabled
+			else
+				if old then
+					if restorefunction then
+						restorefunction(pl.Bullet)
+					else
+						hookfunction(pl.Bullet, old)
+					end
+
+					old = nil
+				end
+			end
+		end,
+		ExtraText = function()
+			return 'PrisonLife'
+		end,
+		Tooltip = 'Silently adjusts your aim towards the enemy'
+	})
+	Target = SilentAim:CreateTargets({
+		Players = true,
+		Walls = true
+	})
+	Mode = SilentAim:CreateDropdown({
+		Name = 'Mode',
+		List = {'Mouse', 'Position'},
+		Function = function(val)
+			if CircleObject then
+				CircleObject.Visible = SilentAim.Enabled and val == 'Mouse'
+			end
+		end,
+		Tooltip = 'Mouse - Checks for entities near the mouses position\nPosition - Checks for entities near the local character'
+	})
+	Range = SilentAim:CreateSlider({
+		Name = 'Range',
+		Min = 1,
+		Max = 1500,
+		Default = 150,
+		Function = function(val)
+			if CircleObject then
+				CircleObject.Radius = val
+			end
+		end,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end
+	})
+	HitChance = SilentAim:CreateSlider({
+		Name = 'Hit Chance',
+		Min = 0,
+		Max = 100,
+		Default = 85,
+		Suffix = '%'
+	})
+	HeadshotChance = SilentAim:CreateSlider({
+		Name = 'Headshot Chance',
+		Min = 0,
+		Max = 100,
+		Default = 65,
+		Suffix = '%'
+	})
+	AutoFire = SilentAim:CreateToggle({
+		Name = 'AutoFire',
+		Function = function(callback)
+			AutoFireRate.Object.Visible = callback
+			AutoFireTaser.Object.Visible = callback
+			AutoFireSwitch.Object.Visible = callback
+		end,
+		Tooltip = 'Automatically fires guns when the specified target conditions are met.'
+	})
+	AutoFireRate = SilentAim:CreateSlider({
+		Name = 'Update rate',
+		Min = 1,
+		Max = 120,
+		Default = 60,
+		Visible = false,
+		Darker = true,
+		Suffix = 'hz'
+	})
+	AutoFireTaser = SilentAim:CreateToggle({
+		Name = 'Ignore Tased',
+		Visible = false,
+		Darker = true
+	})
+	AutoFireSwitch = SilentAim:CreateToggle({
+		Name = 'Auto Switch',
+		Visible = false,
+		Darker = true,
+		Tooltip = 'Spam switch guns while shooting to get fast damage, only good with multiple tools.'
+	})
+	Wallbang = SilentAim:CreateToggle({
+		Name = 'Wallbang',
+		Tooltip = 'Allow you to shoot people through walls when specific conditions are met.\n(If the entity has a valid hitbox position exposed or if the shoot position can be moved past walls (eg hugging walls))'
+	})
+	SilentAim:CreateToggle({
+		Name = 'Range Circle',
+		Function = function(callback)
+			if callback then
+				CircleObject = Drawing.new('Circle')
+				CircleObject.Filled = CircleFilled.Enabled
+				CircleObject.Color = Color3.fromHSV(CircleColor.Hue, CircleColor.Sat, CircleColor.Value)
+				CircleObject.Position = vape.gui.AbsoluteSize / 2
+				CircleObject.Radius = Range.Value
+				CircleObject.NumSides = 100
+				CircleObject.Transparency = 1 - CircleTransparency.Value
+				CircleObject.Visible = SilentAim.Enabled and Mode.Value == 'Mouse'
+			else
+				pcall(function()
+					CircleObject.Visible = false
+					CircleObject:Remove()
+				end)
+			end
+			CircleColor.Object.Visible = callback
+			CircleTransparency.Object.Visible = callback
+			CircleFilled.Object.Visible = callback
+		end
+	})
+	CircleColor = SilentAim:CreateColorSlider({
+		Name = 'Circle Color',
+		Function = function(hue, sat, val)
+			if CircleObject then
+				CircleObject.Color = Color3.fromHSV(hue, sat, val)
+			end
+		end,
+		Darker = true,
+		Visible = false
+	})
+	CircleTransparency = SilentAim:CreateSlider({
+		Name = 'Transparency',
+		Min = 0,
+		Max = 1,
+		Decimal = 10,
+		Default = 0.5,
+		Function = function(val)
+			if CircleObject then
+				CircleObject.Transparency = 1 - val
+			end
+		end,
+		Darker = true,
+		Visible = false
+	})
+	CircleFilled = SilentAim:CreateToggle({
+		Name = 'Circle Filled',
+		Function = function(callback)
+			if CircleObject then
+				CircleObject.Filled = callback
+			end
+		end,
+		Darker = true,
+		Visible = false
+	})
+end)
+
+run(function()
+	local TriggerBot
+	local Targets
+	local rayParams = RaycastParams.new()
+	rayParams.CollisionGroup = 'ClientBullet'
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+	local function getTriggerBotTarget()
+		rayParams.FilterDescendantsInstances = VehicleWallbang.Enabled and {lplr.Character, workspace.CarContainer} or {lplr.Character}
+
+		if entitylib.isAlive then
+			local tool = debug.getupvalue(oldshoot or pl.Shoot, 1)
+			local data = debug.getupvalue(oldshoot or pl.Shoot, 10)
+
+			if tool and data and data.Range then
+				local posX, posY
+				if inputService.MouseBehavior == Enum.MouseBehavior.LockCenter then
+					posX = gameCamera.ViewportSize.X / 2
+					posY = gameCamera.ViewportSize.Y / 2
+				else
+					local location = inputService:GetMouseLocation()
+					posX = location.X
+					posY = location.Y
+				end
+
+				local hitPos
+				local rayPos = gameCamera:ViewportPointToRay(posX, posY)
+				local ray = workspace:Raycast(rayPos.Origin, rayPos.Direction * 1500, rayParams)
+				local vEntity
+
+				for _, entity in entitylib.List do
+					if entity.Targetable and entity.Character and (Targets.Players.Enabled and entity.Player or Targets.NPCs.Enabled and entity.NPC) and entitylib.isVulnerable(entity, true) and ray.Instance:IsDescendantOf(entity.Character) then
+						vEntity = entity
+						break
+					end
+				end
+
+				if vEntity then
+					local origin = entitylib.character.Head.Position
+					local hitCheck = workspace:Raycast(origin, (ray.Position - origin), rayCheck)
+
+					if hitCheck and hitCheck.Instance:IsDescendantOf(vEntity.Character) and (ray.Position - origin).Magnitude <= data.Range then
+						return vEntity
+					end
+				end
+			end
+		end
+	end
+
+	TriggerBot = vape.Categories.Combat:CreateModule({
+		Name = 'TriggerBot',
+		Function = function(callback)
+			if callback then
+				repeat
+					if getTriggerBotTarget() then
+						local obj = {UserInputState = Enum.UserInputState.Begin, UserInputType = Enum.UserInputType.MouseButton1, Position = Vector3.zero}
+						task.spawn(pl.Shoot, obj)
+						obj.UserInputState = Enum.UserInputState.End
+					end
+
+					task.wait()
+				until not TriggerBot.Enabled
+			end
+		end,
+		Tooltip = 'Shoots people that enter your crosshair'
+	})
+	Targets = TriggerBot:CreateTargets({
+		Players = true,
+		NPCs = true
+	})
+end)
+
+run(function()
+	local AutoArmor
+	local pickups = {}
+
+	AutoArmor = vape.Categories.Inventory:CreateModule({
+		Name = 'AutoArmor',
+		Function = function(callback)
+			if callback then
+				pickups = workspace.Prison_ITEMS.clothes:GetChildren()
+
+				AutoArmor:Clean(workspace.Prison_ITEMS.clothes.ChildAdded:Connect(function(pickup)
+					table.insert(pickups, pickup)
+				end))
+
+				AutoArmor:Clean(workspace.Prison_ITEMS.clothes.ChildRemoved:Connect(function(pickup)
+					local index = table.find(pickups, pickup)
+					if index then
+						table.remove(pickups, index)
+					end
+				end))
+
+				repeat
+					if entitylib.isAlive and entitylib.character.Humanoid.MaxHealth <= 100 then
+						local localpos = entitylib.character.RootPart.Position
+
+						for _, pickup in pickups do
+							if (pickup:GetPivot().Position - localpos).Magnitude < 10 and gamepasses[pickup:GetAttribute('RequiredGamepass')] and AutoArmor.Enabled then
+								if pickup.Name == 'Light Vest' and gamepasses[lplr.Team == teams.Criminals and 'Mafia' or 'Riot Police'] then
+									continue
+								end
+
+								replicatedStorage.Remotes.InteractWithItem:InvokeServer(pickup:FindFirstChildWhichIsA('BasePart'))
+							end
+						end
+					end
+
+					task.wait(0.05)
+				until not AutoArmor.Enabled
+			else
+				table.clear(pickups)
+			end
+		end,
+		Tooltip = 'Automatically equip armor from the wall. (tbh this might be useless)'
+	})
+end)
+
+run(function()
+	local AutoHeal
+	local healItems = {
+		Breakfast = true,
+		Lunch = true,
+		Dinner = true
+	}
+
+	AutoHeal = vape.Categories.Inventory:CreateModule({
+		Name = 'AutoHeal',
+		Function = function(callback)
+			if callback then
+				repeat
+					local entity = entitylib.isAlive and entitylib.character
+					if entity and entity.Humanoid.Health <= 85 then
+						local healTool
+						local backpack = lplr:FindFirstChildWhichIsA('Backpack')
+						if backpack then
+							for _, tool in backpack:GetChildren() do
+								if healItems[tool.Name] then
+									healTool = tool
+								end
+							end
+
+							if healTool and (os.clock() - (healTool:GetAttribute('Client_LastConsumedAt') or 0)) >= 3 then
+								local lastEquip = entity.Character:FindFirstChildWhichIsA('Tool')
+								entity.Humanoid:EquipTool(healTool)
+								healTool:SetAttribute('Quantity', healTool:GetAttribute('Quantity') - 1)
+								healTool:SetAttribute('Client_LastConsumedAt', os.clock())
+								notif('AutoHeal', 'Quantity: '..healTool:GetAttribute('Quantity'), 3)
+								replicatedStorage.Remotes.EatFood:FireServer()
+
+								if lastEquip then
+									entity.Humanoid:EquipTool(lastEquip)
+								else
+									entity.Humanoid:UnequipTools()
+								end
+							end
+						end
+					end
+
+					task.wait(0.05)
+				until not AutoHeal.Enabled
+			end
+		end,
+		Tooltip = 'Automatically heal damage with consumables.'
+	})
+end)
+
+run(function()
+	local AutoHotbar
+	local SortList = {}
+
+	local function DoSorting()
+		table.sort(pl.SwitchTable, function(a, b)
+			return (SortList[a.Tool.name] or 999 + a.Slot) < (SortList[b.Tool.name] or 999 + b.Slot)
+		end)
+
+		task.spawn(pl.SwitchUpdate)
+	end
+
+	local function EntityAdded()
+		local backpack = lplr:FindFirstChildWhichIsA('Backpack')
+		if backpack then
+			AutoHotbar:Clean(backpack.ChildAdded:Connect(function(tool)
+				if SortList[tool.Name] then
+					task.defer(DoSorting)
+				end
+			end))
+		end
+
+		DoSorting()
+	end
+
+	AutoHotbar = vape.Categories.Inventory:CreateModule({
+		Name = 'AutoHotbar',
+		Function = function(callback)
+			if callback then
+				AutoHotbar:Clean(entitylib.Events.LocalAdded:Connect(EntityAdded))
+				if entitylib.isAlive then
+					task.spawn(EntityAdded)
+				end
+			end
+		end,
+		Tooltip = 'Automatically sort hotbar entries'
+	})
+	AutoHotbar:CreateTextList({
+		Name = 'Sort Order',
+		Default = {'1/AK-47', '1/MP5', '1/M4A1', '2/Remington 870', '2/M700', '3/M9', '3/Revolver', '4/Taser'},
+		Function = function(list)
+			table.clear(SortList)
+			for _, entry in list do
+				local data = entry:split('/')
+				local priority = tonumber(data[1]) or 999
+				SortList[data[2] or ''] = priority
+			end
+		end
+	})
+end)
+
+run(function()
+	local AutoPickup
+	local items = {}
+	local PickupList = {}
+
+	local function AddPickup(pickup)
+		if pickup:IsA('Model') and pickup.Name ~= 'Model' and pickup:GetAttribute('ToolName') then
+			table.insert(items, {
+				pickup,
+				pickup.Name == 'TouchGiver'
+			})
+		end
+	end
+
+	local function hasTool(name, backpack)
+		local tool = lplr.Character:FindFirstChildWhichIsA('Tool')
+		return backpack:FindFirstChild(name) or tool and tool.Name == name and tool
+	end
+
+	AutoPickup = vape.Categories.Inventory:CreateModule({
+		Name = 'AutoPickup',
+		Function = function(callback)
+			if callback then
+				for _, pickup in workspace:GetChildren() do
+					task.spawn(AddPickup, pickup)
+				end
+
+				for _, pickup in workspace:QueryDescendants('Model > .TouchGiver') do
+					task.spawn(AddPickup, pickup)
+				end
+
+				AutoPickup:Clean(workspace.ChildAdded:Connect(AddPickup))
+				AutoPickup:Clean(workspace.ChildRemoved:Connect(function(pickup)
+					for index, data in items do
+						if data[1] == pickup then
+							table.remove(items, index)
+							break
+						end
+					end
+				end))
+
+				repeat
+					if entitylib.isAlive then
+						local localpos = entitylib.character.RootPart.Position
+						local backpack = lplr:FindFirstChildWhichIsA('Backpack')
+
+						if backpack then
+							for _, pickup in items do
+								if pickup[1].PrimaryPart and (pickup[1].PrimaryPart.Position - localpos).Magnitude < 12 then
+									local tool = pickup[1]:GetAttribute('ToolName')
+									if hasTool(tool, backpack) then
+										continue
+									end
+
+									if pickup[2] and not table.find(PickupList[lplr.Team == teams.Guards and 'Guard' or (lplr.Team == teams.Criminals and 'Criminal' or 'Prisoner')].ListEnabled, tool) then
+										continue
+									end
+
+									replicatedStorage.Remotes.GiverPressed:FireServer(pickup[1])
+								end
+							end
+						end
+					end
+
+					task.wait(0.05)
+				until not AutoPickup.Enabled
+			else
+				table.clear(items)
+			end
+		end,
+		Tooltip = 'Automatically grab item pickups'
+	})
+
+	for _, team in {'Prisoner', 'Guard', 'Criminal'} do
+		PickupList[team] = AutoPickup:CreateTextList({
+			Name = team,
+			Default = {team == 'Criminal' and 'AK-47' or 'MP5', 'Remington 870'},
+			Placeholder = 'item'
+		})
+	end
+end)
+
+run(function()
+	local C4ESP
+	local FillColor
+	local OutlineColor
+	local FillTransparency
+	local OutlineTransparency
+	local Reference = {}
+	local Folder = Instance.new('Folder')
+	Folder.Parent = vape.holder
+
+	local function Added(c4)
+		local cham = Instance.new('Highlight')
+		cham.Adornee = c4
+		cham.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+		cham.FillColor = Color3.fromHSV(FillColor.Hue, FillColor.Sat, FillColor.Value)
+		cham.OutlineColor = Color3.fromHSV(OutlineColor.Hue, OutlineColor.Sat, OutlineColor.Value)
+		cham.FillTransparency = FillTransparency.Value
+		cham.OutlineTransparency = OutlineTransparency.Value
+		cham.Parent = Folder
+
+		Reference[c4] = cham
+	end
+
+	local function Removed(c4)
+		if Reference[c4] then
+			if vape.ThreadFix then
+				setthreadidentity(8)
+			end
+
+			Reference[c4]:Destroy()
+			Reference[c4] = nil
+		end
+	end
+
+	C4ESP = vape.Categories.Render:CreateModule({
+		Name = 'C4ESP',
+		Function = function(callback)
+			if callback then
+				C4ESP:Clean(collectionService:GetInstanceAddedSignal('C4'):Connect(Added))
+				C4ESP:Clean(collectionService:GetInstanceRemovedSignal('C4'):Connect(Removed))
+
+				for _, c4 in collectionService:GetTagged('C4') do
+					task.spawn(Added, c4)
+				end
+			else
+				for _, cham in Reference do
+					cham:Destroy()
+				end
+				table.clear(Reference)
+			end
+		end,
+		Tooltip = 'Display all C4\'s placed'
+	})
+	FillColor = C4ESP:CreateColorSlider({
+		Name = 'Color',
+		Function = function(hue, sat, val)
+			for _, cham in Reference do
+				cham.FillColor = Color3.fromHSV(hue, sat, val)
+			end
+		end
+	})
+	OutlineColor = C4ESP:CreateColorSlider({
+		Name = 'Outline Color',
+		DefaultSat = 0,
+		Function = function(hue, sat, val)
+			for _, cham in Reference do
+				cham.OutlineColor = Color3.fromHSV(hue, sat, val)
+			end
+		end
+	})
+	FillTransparency = C4ESP:CreateSlider({
+		Name = 'Transparency',
+		Min = 0,
+		Max = 1,
+		Default = 0.5,
+		Function = function(val)
+			for _, cham in Reference do
+				cham.FillTransparency = val
+			end
+		end,
+		Decimal = 10
+	})
+	OutlineTransparency = C4ESP:CreateSlider({
+		Name = 'Outline Transparency',
+		Min = 0,
+		Max = 1,
+		Default = 0.5,
+		Function = function(val)
+			for _, cham in Reference do
+				cham.OutlineTransparency = val
+			end
+		end,
+		Decimal = 10
+	})
+end)
+
+run(function()
+	local CameraPhase
+	local old
+
+	CameraPhase = vape.Categories.Render:CreateModule({
+		Name = 'CameraPhase',
+		Function = function(callback)
+			if callback then
+				local popper = require(lplr.PlayerScripts.PlayerModule.CameraModule.ZoomController.Popper)
+				old = debug.getupvalue(debug.getupvalue(popper, 3), 7)
+				debug.setconstant(old, 16, 0)
+			else
+				if old then
+					debug.setconstant(old, 16, 0.25)
+					old = nil
+				end
+			end
+		end,
+		Tooltip = 'Allow the camera to phase through walls.'
+	})
+end)
+
+run(function()
+	local KillNotifications
+
+	KillNotifications = vape.Categories.Render:CreateModule({
+		Name = 'KillNotifications',
+		Function = function(callback)
+			if callback then
+				KillNotifications:Clean(vapeEvents.PlayerKill.Event:Connect(function(killer, victim)
+					if victim == lplr.Name and killer ~= lplr.Name then
+						notif('KillNotifications', killer..' killed you!', 5)
+					end
+				end))
+			end
+		end,
+		Tooltip = 'Sends a notification of who killed you.'
+	})
+end)
+
+run(function()
+	local AutoDetonate
+	local SafeCheck
+	local localc4
+	local ticks = 0
+	local rayParams = RaycastParams.new()
+	rayParams.CollisionGroup = 'ClientBullet'
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+	AutoDetonate = vape.Categories.Utility:CreateModule({
+		Name = 'AutoDetonate',
+		Function = function(callback)
+			if callback then
+				AutoDetonate:Clean(collectionService:GetInstanceAddedSignal('C4'):Connect(function(c4)
+					if c4:GetAttribute('UserId') == lplr.UserId then
+						localc4 = c4
+					end
+				end))
+
+				for _, c4 in collectionService:GetTagged('C4') do
+					if c4:GetAttribute('UserId') == lplr.UserId then
+						localc4 = c4
+					end
+				end
+
+				repeat
+					local backpack = lplr:FindFirstChildWhichIsA('Backpack')
+
+					if backpack and localc4 then
+						local tool = backpack:FindFirstChild('C4 Explosive')
+
+						if tool then
+							local entity = entitylib.EntityPosition({
+								Players = true,
+								Part = 'RootPart',
+								Range = 25,
+								Origin = localc4.Position
+							})
+
+							if entity then
+								rayParams.FilterDescendantsInstances = {entity.Character, lplr.Character, localc4}
+
+								local rootdiff = (entitylib.character.RootPart.Position - localc4.Position)
+								local ray = workspace:Raycast(localc4.Position, (entity.RootPart.Position - localc4.Position), rayParams)
+								if SafeCheck.Enabled and not ray then
+									ray = not (workspace:Raycast(localc4.Position, rootdiff, rayParams) or rootdiff.Magnitude > 40)
+								end
+
+								if not ray then
+									ticks += 1
+									if ticks > 3 then
+										local lastEquip = lplr.Character:FindFirstChildWhichIsA('Tool')
+										entitylib.character.Humanoid:EquipTool(tool)
+
+										task.spawn(function()
+											replicatedStorage.Remotes.C4.ActivateC4:InvokeServer()
+										end)
+
+										if lastEquip then
+											entitylib.character.Humanoid:EquipTool(lastEquip)
+										else
+											entitylib.character.Humanoid:UnequipTools()
+										end
+									end
+
+									task.wait(0.05)
+									continue
+								end
+							end
+						end
+					end
+
+					ticks = 0
+					task.wait(0.05)
+				until not AutoDetonate.Enabled
+			end
+		end,
+		Tooltip = 'Automatically detonate when enemies are nearby.'
+	})
+	SafeCheck = AutoDetonate:CreateToggle({
+		Name = 'Safety Check'
+	})
+end)
+
+run(function()
+	local AutoReload
+	local HotSwap
+	local thread, oldplaysound
+	local priority = {
+		M4A1 = 1,
+		['AK-47'] = 1,
+		MP5 = 1,
+		FAL = 1,
+		['Remington 870'] = 2,
+		M9 = 3,
+		Revolver = 4
+	}
+
+	local function getWeapon()
+		local items = {}
+		local backpack = lplr:FindFirstChildWhichIsA('Backpack')
+		if backpack then
+			for _, tool in backpack:GetChildren() do
+				if tool:GetAttribute('FireRate') and (tool:GetAttribute('Local_ReloadSession') or 0) <= 0 and tool.Name ~= 'Taser' and tool.Name ~= 'M700' then
+					table.insert(items, tool)
+				end
+			end
+
+			table.sort(items, function(a, b)
+				return (priority[a.Name] or 100) < (priority[b.Name] or 100)
+			end)
+
+			return items[1]
+		end
+	end
+
+	AutoReload = vape.Categories.Utility:CreateModule({
+		Name = 'AutoReload',
+		Function = function(callback)
+			if callback then
+				local gui = lplr.PlayerGui.Home.hud.BottomRightFrame.GunFrame.BulletsLabel
+				if gui then
+					AutoReload:Clean(gui:GetPropertyChangedSignal('Text'):Connect(function()
+						if gui.Text ~= '...' then
+							local tool = debug.getupvalue(pl.Shoot, 1)
+							if tool and tool:GetAttribute('Local_CurrentAmmo') <= 0 then
+								task.spawn(pl.Reload)
+
+								if HotSwap.Enabled then
+									local weapon = getWeapon()
+
+									if weapon then
+										entitylib.character.Humanoid:EquipTool(weapon)
+									end
+								end
+							end
+						end
+					end))
+
+					-- reimplementation of playsound to get rid of the bad error
+					oldplaysound = hookfunction(pl.PlaySound, function(sound)
+						local obj = debug.getupvalue(pl.Shoot, 1)
+						obj = obj and obj:FindFirstChild('Handle')
+						obj = obj and obj:FindFirstChild(sound)
+
+						if obj then
+							local clone = obj:Clone()
+							clone.Parent = obj.Parent
+							clone:Play()
+
+							task.delay(5, clone.Destroy, clone)
+						end
+					end)
+				end
+			else
+				if oldplaysound then
+					if restorefunction then
+						restorefunction(pl.PlaySound)
+					else
+						hookfunction(pl.PlaySound, oldplaysound)
+					end
+
+					oldplaysound = nil
+				end
+			end
+		end,
+		Tooltip = 'Automatically reload after reaching 0 bullets'
+	})
+	HotSwap = AutoReload:CreateToggle({
+		Name = 'Auto Swap',
+		Tooltip = 'Automatically swap weapons when reloading'
+	})
+end)
+
+run(function()
+	local AutoTeam
+
+	AutoTeam = vape.Categories.Utility:CreateModule({
+		Name = 'AutoTeam',
+		Function = function(callback)
+			if callback and lplr.Team == teams.Neutral then
+				local gui = lplr.PlayerGui:FindFirstChild('TeamsFrame', true)
+				if gui then
+					for _, holder in gui:GetChildren() do
+						if holder.Button.AutoButtonColor then
+							pickTeam(holder.Button)
+							break
+						end
+					end
+				end
+			end
+		end,
+		Tooltip = 'Automatically join a team when joining the server'
+	})
+end)
+
+run(function()
+	local AutoToxic
+	local Toggles, Lists, Cloned, Presets = {}, {}, {}, {}
+
+	local function sendMessage(name, obj, default)
+		local message = default
+		if #Lists[name].ListEnabled > 0 then
+			if #Cloned[name] <= 0 then
+				Cloned[name] = table.clone(Lists[name].ListEnabled)
+			end
+
+			local entry = Random.new():NextInteger(1, #Cloned[name])
+			message = Cloned[name][entry]
+			table.remove(Cloned[name], entry)
+		end
+
+		if not message then return end
+
+		message = message and message:gsub('<obj>', obj or '') or ''
+		if textChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+			if textChatService:CanUserChatAsync(lplr.UserId) then
+				textChatService.ChatInputBarConfiguration.TargetTextChannel:SendAsync(message)
+			else
+				textChatService.ChatInputBarConfiguration.TargetTextChannel:SendPresetAsync(Presets[message] or Presets['So close'])
+			end
+		else
+			replicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(message, 'All')
+		end
+	end
+
+	AutoToxic = vape.Categories.Utility:CreateModule({
+		Name = 'AutoToxic',
+		Function = function(callback)
+			if callback then
+				AutoToxic:Clean(vapeEvents.CheaterKicked.Event:Connect(function(plr)
+					sendMessage('Kicked', plr, 'skill issue cheat | <obj>')
+				end))
+			end
+		end,
+		Tooltip = 'Says a message after a cheater gets kicked with CheatDetector enabled.'
+	})
+	for _, v in {'Kicked'} do
+		Cloned[v] = {}
+		Toggles[v] = AutoToxic:CreateToggle({
+			Name = v..' ',
+			Function = function(callback)
+				if Lists[v] then
+					Lists[v].Object.Visible = callback
+				end
+			end,
+			Default = true
+		})
+		Lists[v] = AutoToxic:CreateTextList({
+			Name = v,
+			Darker = true,
+			Function = function()
+				table.clear(Cloned[v])
+			end
+		})
+	end
+
+	pcall(function()
+		for _, group in textChatService:GetPresetsAsync().categoryGroups do
+			for _, category in group.categories do
+				for _, message in category.messages do
+					Presets[message.value] = message.presetId
+				end
+			end
+		end
+	end)
+end)
+
+run(function()
+	local CheatDetector
+	local AddTarget
+	local Teleport
+	local positions = {}
+	local overlap = OverlapParams.new()
+	overlap.CollisionGroup = 'Players'
+	overlap.FilterDescendantsInstances = {workspace.CarContainer, workspace.Doors}
+	overlap.FilterType = Enum.RaycastFilterType.Exclude
+	local carOverlap = OverlapParams.new()
+	carOverlap.FilterDescendantsInstances = {workspace.CarContainer}
+	carOverlap.FilterType = Enum.RaycastFilterType.Include
+	carOverlap.MaxParts = 1
+
+	local whiteliststates = {
+		[Enum.HumanoidStateType.Running] = true,
+		[Enum.HumanoidStateType.Jumping] = true,
+		[Enum.HumanoidStateType.Freefall] = true,
+		[Enum.HumanoidStateType.Landed] = true,
+		[Enum.HumanoidStateType.FallingDown] = true,
+		[Enum.HumanoidStateType.GettingUp] = true,
+		[Enum.HumanoidStateType.Climbing] = true,
+		[Enum.HumanoidStateType.Seated] = true,
+		[Enum.HumanoidStateType.Ragdoll] = true,
+		[Enum.HumanoidStateType.Dead] = true,
+		[Enum.HumanoidStateType.None] = true
+	}
+
+	CheatDetector = vape.Categories.Utility:CreateModule({
+		Name = 'CheatDetector',
+		Function = function(callback)
+			if callback then
+				CheatDetector:Clean(vapeEvents.CheatFlagged.Event:Connect(function(plr, flagType)
+					notif('CheatDetector', 'This player may be cheating! ('..flagType..'): '..plr.Name, 60, 'warning')
+					if AddTarget.Enabled then
+						tempTargets[plr.Name] = true
+					end
+
+					local entity = entitylib.getEntity(plr)
+					if entity then
+						entitylib.Events.EntityUpdated:Fire(entity)
+						if AddTarget.Enabled then
+							entity.Target = true
+						end
+					end
+				end))
+
+				CheatDetector:Clean(entitylib.Events.EntityRemoved:Connect(function(entity)
+					positions[entity] = nil
+				end))
+
+				local lastDelta = 0
+				repeat
+					for _, entity in entitylib.List do
+						if entity.Health > 0 and entity.Player and not Cheats.Flagged[entity.Player.UserId] then
+							local playerPos = entity.RootPart.Position
+
+							if not checkPoint(entity.Head.Position, overlap) then
+								Cheats:Flag(entity.Player, 'phase/noclip', 20)
+							end
+
+							if not whiteliststates[entity.Humanoid:GetState()] then
+								Cheats:Flag(entity.Player, 'invalid state '..entity.Humanoid:GetState().Name, 1)
+							end
+
+							local velo = entity.RootPart.AssemblyLinearVelocity
+							if not entity.Humanoid.SeatPart then
+								if (velo * Vector3.new(1, 0, 1)).Magnitude > 26 then
+									if #workspace:GetPartBoundsInRadius(playerPos, 30, carOverlap) <= 0 then
+										Cheats:Flag(entity.Player, 'speed', 20)
+									end
+								end
+
+								if positions[entity] then
+									if Teleport.Enabled and ((playerPos - positions[entity][1]) * Vector3.new(1, 0, 1)).Magnitude > 50 and #workspace:GetPartBoundsInRadius(playerPos, 30, carOverlap) <= 0 then
+										local canFlag = entity.Player.Team ~= teams.Inmates or (os.clock() - entity.SpawnTime) > 0.1
+
+										if canFlag then
+											Cheats:Flag(entity.Player, 'teleport', 1)
+										end
+									end
+								end
+
+								if velo.Y > 50 then
+									Cheats:Flag(entity.Player, 'highjump', 20)
+								end
+
+								if not positions[entity] or (os.clock() - positions[entity][2]) > 0.2 then
+									positions[entity] = {playerPos, os.clock()}
+								end
+							else
+								positions[entity] = {playerPos, os.clock()}
+							end
+						end
+					end
+
+					lastDelta = task.wait(0.05)
+				until not CheatDetector.Enabled
+			else
+				table.clear(positions)
+				Cheats:Clear()
+			end
+		end,
+		Tooltip = 'Sends alerts for any possible cheaters.'
+	})
+	AddTarget = CheatDetector:CreateToggle({
+		Name = 'Temporary Target',
+		Tooltip = 'Add temporary combat module priority for cheaters.',
+		Default = true
+	})
+	Teleport = CheatDetector:CreateToggle({
+		Name = 'Teleport',
+		Tooltip = 'Detect people teleporting (EXPERIMENTAL)',
+		Default = true
+	})
+end)
+
+run(function()
+	local Disabler
+	local old
+
+	local function EntityAdded(entity)
+		task.defer(function()
+			old = getconnections(entity.Head:GetPropertyChangedSignal('CanCollide'))[1]
+			if old then
+				old:Disable()
+			end
+		end)
+	end
+
+	Disabler = vape.Categories.Utility:CreateModule({
+		Name = 'Disabler',
+		Function = function(callback)
+			if callback then
+				Disabler:Clean(entitylib.Events.LocalAdded:Connect(EntityAdded))
+				if entitylib.isAlive then
+					task.spawn(EntityAdded, entitylib.character)
+				end
+			else
+				if old then
+					old:Enable()
+					old = nil
+				end
+			end
+		end,
+		Tooltip = 'Fixes phase with Character mode.',
+		ExtraText = function()
+			return 'Phase'
+		end
+	})
+end)
