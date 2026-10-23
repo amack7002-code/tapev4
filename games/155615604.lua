@@ -1,5 +1,11 @@
 local run = function(func)
-	func()
+    local ok, err = xpcall(func, debug.traceback)
+
+    if not ok then
+        warn('[Module Error] ' .. tostring(err))
+    end
+
+    return ok, err
 end
 local cloneref = cloneref or function(obj)
 	return obj
