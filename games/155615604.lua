@@ -306,7 +306,7 @@ run(function()
 			return false
 		end
 
-		return entity.Health > 0 and entity.Humanoid:GetState() ~= Enum.HumanoidStateType.Dead and entity.SpawnTime < os.clock() and not not entity.Character:FindFirstChildWhichIsA('ForceField') and (entity.Player.Team ~= teams.Inmates or (skipCheck or entity.Character:GetAttribute('Trespassing') or entity.Character:GetAttribute('Hostile')))
+		return entity.Health > 0 and entity.Humanoid:GetState() ~= Enum.HumanoidStateType.Dead and entity.SpawnTime < os.clock() and not entity.Character:FindFirstChildWhichIsA('ForceField') and (entity.Player.Team ~= teams.Inmates or (skipCheck or entity.Character:GetAttribute('Trespassing') or entity.Character:GetAttribute('Hostile')))
 	end
 
 	entitylib.EntityMouse = function(entitysettings)
@@ -438,8 +438,8 @@ run(function()
 	end
 
 	entitylib.Wallcheck = function(origin, position, checkPosition, part, entity)
-		local ray = workspace.Raycast(workspace, position, (origin - position), OriginScanner.Ray)
-		if ray or workspace.Raycast(workspace, origin, (position - origin), OriginScanner.Ray) then
+		local ray = workspace:Raycast(position, (origin - position), OriginScanner.Ray)
+		if ray or workspace:Raycast(origin, (position - origin), OriginScanner.Ray) then
 			return not checkPosition or not OriginScanner:Scan(checkPosition, position, ray and ray.Position + ray.Normal * 0.01 or nil, part, entity)
 		end
 
@@ -2435,7 +2435,7 @@ run(function()
 
 				if vEntity then
 					local origin = entitylib.character.Head.Position
-					local hitCheck = workspace:Raycast(origin, (ray.Position - origin), rayCheck)
+					local hitCheck = workspace:Raycast(origin, (ray.Position - origin), rayParams)
 
 					if hitCheck and hitCheck.Instance:IsDescendantOf(vEntity.Character) and (ray.Position - origin).Magnitude <= data.Range then
 						return vEntity
