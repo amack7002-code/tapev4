@@ -8133,7 +8133,9 @@ function mainapi:Load(skipgui, profile)
 
 	for i, v in savedata.Categories or {} do
 		local object = self.Categories[i]
-		if not object then continue end
+		-- the profile list is GUI state, not per-profile data; applying a preset's
+		-- empty Profiles list would hide every saved profile
+		if not object or i == 'Profiles' then continue end
 
 		if object.Options and v.Options then
 			self:LoadOptions(object, v.Options)
@@ -8378,6 +8380,7 @@ function mainapi:Save(newprofile)
 	}
 
 	for i, v in self.Categories do
+		if i == 'Profiles' then continue end
 		(v.Type ~= 'Category' and i ~= 'Main' and savedata or guidata).Categories[i] = {
 			Enabled = i ~= 'Main' and v.Button.Enabled or nil,
 			Expanded = v.Type ~= 'Overlay' and v.Expanded or nil,
@@ -9370,10 +9373,13 @@ local function refreshPremadeWindow()
 								pcall(function() delfile('aerov4/profiles/'..profileName..mainapi.Place..'.txt') end)
 							end
 							local premadeData = readfile(premadeFile)
-							writefile('aerov4/profiles/'..profileName..mainapi.Place..'.txt', premadeData)
 							table.insert(mainapi.Profiles, {Name = profileName, Bind = {}})
 							profilesCategory:ChangeValue()
-							mainapi:Load(true)
+							-- record the profile switch before writing the preset, otherwise
+							-- Save rewrites the file and Load just restores the old profile
+							mainapi:Save(profileName)
+							writefile('aerov4/profiles/'..profileName..mainapi.Place..'.txt', premadeData)
+							mainapi:Load(true, profileName)
 							tween:Tween(premadeWindow, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 								Position = UDim2.new(0.5, -340, 0.5, -220),
 								Size = UDim2.fromOffset(640, 440)
@@ -9415,11 +9421,13 @@ local function refreshPremadeWindow()
 				
 				local premadeData = readfile(premadeFile)
 				
-				writefile('aerov4/profiles/'..newProfileName..mainapi.Place..'.txt', premadeData)
 				table.insert(mainapi.Profiles, {Name = newProfileName, Bind = {}})
 				profilesCategory:ChangeValue()
+				-- save the profile switch before writing the preset so Save cannot
+				-- clobber it when the preset name is already the active profile
 				mainapi:Save(newProfileName)
-				mainapi:Load(true)
+				writefile('aerov4/profiles/'..newProfileName..mainapi.Place..'.txt', premadeData)
+				mainapi:Load(true, newProfileName)
 				
 				tween:Tween(premadeWindow, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 					Position = UDim2.new(0.5, -340, 0.5, -220),
