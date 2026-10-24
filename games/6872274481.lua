@@ -1512,7 +1512,7 @@ run(function()
 			return {
 				instance = call.instance,
 				SendToServer = function(_, attackTable, ...)
-					if store.KillauraTarget and not store.kaSending and not store.kaSwingOnly then
+					if (store.KillauraTarget or tick() - (store.kaTargetAt or 0) < 0.2) and not store.kaSending then
 						return
 					end
 					local suc, plr = pcall(function()
@@ -9407,16 +9407,9 @@ run(function()
 
 	local function swingReady(cooldown)
 		if not LegitAura.Enabled then return true end
-		local sc = bedwars.SwordController
-		local swung = sc and sc.lastSwing or 0
-		if swung <= strike.used or tick() - swung > math.max(cooldown, 0.3) + 0.1 then
-			return false
-		end
-		if sc and workspace:GetServerTimeNow() - (sc.lastAttack or 0) < 0.25 then
-			strike.used = swung
-			return false
-		end
-		return true
+		if inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then return true end
+		local swung = bedwars.SwordController and bedwars.SwordController.lastSwing or 0
+		return swung > strike.used and tick() - swung <= math.max(cooldown, 0.3) + 0.1
 	end
 
 	local function nextOpen(info, blade)
@@ -9533,7 +9526,7 @@ run(function()
 					task.spawn(function()
 						local going = false
 						repeat
-							if Attacking then
+							if Attacking and not LegitAura.Enabled then
 								if not armC0 then
 									armC0 = gameCamera.Viewmodel.RightHand.RightWrist.C0
 								end
@@ -9620,6 +9613,7 @@ run(function()
 									Attacking = true
 									getgenv().Attacking = true
 									store.KillauraTarget = foe
+									store.kaTargetAt = tick()
 									targetHoldUntil = tick() + TARGET_LOCK_GRACE
 									if not Swing.Enabled and AnimDelay < tick() and not LegitAura.Enabled and store.hand and store.hand.tool == blade.tool then
 										local effectSpeed = (info.sword.respectAttackSpeedForEffects and info.sword.attackSpeed or 0.11) * furyMultiplier()
